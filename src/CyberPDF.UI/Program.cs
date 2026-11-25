@@ -1,3 +1,4 @@
+using System.Globalization;
 using CyberPDF.Common.I18n;
 using CyberPDF.Common.Settings;
 using CyberPDF.Core.Diagnostics;
@@ -26,7 +27,7 @@ internal static class Program
 
         if (!singleInstance.IsFirstInstance)
         {
-            singleInstance.SendToRunningInstance(requestedFile);
+            SingleInstance.SendToRunningInstance(requestedFile);
             // A reader must never leave a headless process behind: without an
             // explicit exit the WinForms runtime keeps running with no window.
             Environment.Exit(0);
@@ -97,7 +98,9 @@ internal static class Program
             var searchArg = args.FirstOrDefault(a => a.StartsWith("--search=", StringComparison.OrdinalIgnoreCase));
             var searchTerm = searchArg?.Substring("--search=".Length);
             var panelArg = args.FirstOrDefault(a => a.StartsWith("--panel=", StringComparison.OrdinalIgnoreCase));
-            int? panelTab = panelArg is null ? null : int.Parse(panelArg.Substring("--panel=".Length));
+            int? panelTab = panelArg is null
+                ? null
+                : int.Parse(panelArg.AsSpan("--panel=".Length), CultureInfo.InvariantCulture);
             window.Shown += async (_, _) =>
             {
                 // Opening is asynchronous (the document is loaded on the PDFium

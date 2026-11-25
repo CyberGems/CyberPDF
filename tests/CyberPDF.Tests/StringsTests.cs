@@ -54,7 +54,7 @@ public sealed class StringsTests
         Assert.Equal("Página 3 de 10", Strings.Format("PageOf", 3, 10));
     }
 
-    private static IEnumerable<int> Placeholders(string text)
+    private static List<int> Placeholders(string text)
     {
         var results = new List<int>();
         for (var i = 0; i < text.Length - 2; i++)

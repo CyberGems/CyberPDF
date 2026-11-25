@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using CyberPDF.Common.I18n;
 
 namespace CyberPDF.Common.Settings;
@@ -27,6 +28,15 @@ public sealed class SettingsStore
         TypeInfoResolver = SettingsJsonContext.Default,
     };
 
+    // Resolve the generated metadata once. Serializing through JsonTypeInfo is
+    // what keeps the trimmer and the AOT compiler able to see every property;
+    // the generic overloads are reflection based and warn under both analyzers.
+    private static readonly JsonTypeInfo<AppSettings> WriteInfo =
+        (JsonTypeInfo<AppSettings>)WriteOptions.GetTypeInfo(typeof(AppSettings));
+
+    private static readonly JsonTypeInfo<AppSettings> ReadInfo =
+        (JsonTypeInfo<AppSettings>)ReadOptions.GetTypeInfo(typeof(AppSettings));
+
     public SettingsStore(string? filePath = null)
     {
         FilePath = filePath ?? Path.Combine(AppPaths.DataDirectory, "settings.json");
@@ -47,7 +57,7 @@ public sealed class SettingsStore
             {
                 return new AppSettings();
             }
-            var settings = JsonSerializer.Deserialize<AppSettings>(json, ReadOptions) ?? new AppSettings();
+            var settings = JsonSerializer.Deserialize(json, ReadInfo) ?? new AppSettings();
             Sanitize(settings);
             return settings;
         }
@@ -70,7 +80,7 @@ public sealed class SettingsStore
             // Write to a temporary file and replace, so a crash mid-write cannot
             // leave a truncated settings file behind.
             var temp = FilePath + ".tmp";
-            File.WriteAllText(temp, JsonSerializer.Serialize(settings, WriteOptions));
+            File.WriteAllText(temp, JsonSerializer.Serialize(settings, WriteInfo));
             File.Move(temp, FilePath, overwrite: true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

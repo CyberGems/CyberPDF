@@ -21,14 +21,8 @@ public sealed class DocumentLayout
     public DocumentLayout(IReadOnlyList<PageSize> pageSizes, float zoom, int gap, int horizontalPadding)
     {
         ArgumentNullException.ThrowIfNull(pageSizes);
-        if (zoom <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(zoom));
-        }
-        if (horizontalPadding < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(horizontalPadding));
-        }
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(zoom);
+        ArgumentOutOfRangeException.ThrowIfNegative(horizontalPadding);
 
         Zoom = zoom;
         Gap = Math.Max(0, gap);

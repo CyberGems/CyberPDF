@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 
 namespace CyberPDF.Tests;
@@ -50,7 +51,7 @@ internal static class PdfWriter
             var content = new StringBuilder("BT /F1 11 Tf 50 800 Td 14 TL\n");
             for (var line = 1; line <= linesPerPage; line++)
             {
-                content.Append($"({PageLine(i + 1, line)}) Tj T*\n");
+                content.Append(CultureInfo.InvariantCulture, $"({PageLine(i + 1, line)}) Tj T*\n");
             }
             content.Append("ET");
             var bytes = Encoding.ASCII.GetBytes(content.ToString());

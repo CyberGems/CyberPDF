@@ -74,7 +74,10 @@ public sealed class RenderedPage : IDisposable
                 width, height, PdfiumNative.BitmapFormatBgra, data.Scan0, data.Stride);
             if (native == IntPtr.Zero)
             {
-                throw new OutOfMemoryException($"Could not create a {width}x{height} render surface.");
+                // Not OutOfMemoryException: the runtime reserves that type and
+                // callers would treat it as fatal. A rejected surface is a
+                // render failure like any other.
+                throw new InvalidOperationException($"Could not create a {width}x{height} render surface.");
             }
 
             try

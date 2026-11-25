@@ -109,11 +109,20 @@ public static class BookmarkReader
         }
 
         // The length is in bytes and includes a UTF-16 terminator.
-        var chars = (int)(length / sizeof(char));
         var buffer = System.Runtime.InteropServices.Marshal.AllocHGlobal((int)length);
         try
         {
-            Interop.PdfiumNative.FPDFBookmark_GetTitle(bookmark, buffer, length);
+            // The return value is the byte count actually written. Trusting it
+            // instead of the earlier probe keeps the read in bounds if the title
+            // changed between the two calls, which can happen while a document
+            // is still loading.
+            var written = Interop.PdfiumNative.FPDFBookmark_GetTitle(bookmark, buffer, length);
+            if (written == 0)
+            {
+                return string.Empty;
+            }
+
+            var chars = (int)(written / sizeof(char));
             var text = System.Runtime.InteropServices.Marshal.PtrToStringUni(buffer, chars) ?? string.Empty;
             return text.TrimEnd('\0').Trim();
         }

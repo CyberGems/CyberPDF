@@ -5,6 +5,8 @@ namespace CyberPDF.Tests;
 
 public sealed class DocumentLayoutTests
 {
+    private static readonly int[] FirstThreePages = { 0, 1, 2 };
+
     [Fact]
     public void SlotsStackVerticallyWithGaps()
     {
@@ -67,7 +69,7 @@ public sealed class DocumentLayoutTests
         var layout = TestDocuments.Layout(sizes, zoom: 1f, gap: 0, padding: 0);
 
         var visible = layout.VisiblePages(950, 2050, includeMargin: false);
-        Assert.Equal(new[] { 0, 1, 2 }, visible.Select(s => s.PageIndex).ToArray());
+        Assert.Equal(FirstThreePages, visible.Select(s => s.PageIndex).ToArray());
     }
 
     [Fact]

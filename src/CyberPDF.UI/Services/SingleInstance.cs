@@ -98,7 +98,7 @@ public sealed class SingleInstance : IDisposable
     /// its own, so the message is broadcast; the running instance is the only
     /// listener for this registered message.
     /// </summary>
-    public void SendToRunningInstance(string? filePath)
+    public static void SendToRunningInstance(string? filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath))
         {
@@ -159,26 +159,28 @@ public sealed class SingleInstance : IDisposable
     private static IntPtr FindOwnerWindow()
     {
         var found = IntPtr.Zero;
+        var className = new char[256];
         EnumWindows((hwnd, _) =>
         {
             // Match the window class, not the title: another application (an
             // editor with this project's AGENTS.md open, for instance) can have
             // "CyberPDF" in its title, and posting the handoff to it would lose
             // the file silently.
-            var className = new System.Text.StringBuilder(256);
-            if (GetClassName(hwnd, className, className.Capacity) == 0)
+            Array.Clear(className);
+            var length = GetClassName(hwnd, className, className.Length);
+            if (length == 0)
             {
                 return true;
             }
-            if (!className.ToString().StartsWith(WindowClassNamePrefix, StringComparison.Ordinal))
+            if (!new ReadOnlySpan<char>(className, 0, length).StartsWith(WindowClassNamePrefix, StringComparison.Ordinal))
             {
                 return true;
             }
 
-            // Skip processes that are gone but whose window outlives them.
-            uint pid;
-            GetWindowThreadProcessId(hwnd, out pid);
-            if (pid == 0)
+            // Skip processes that are gone but whose window outlives them. A
+            // zero thread id means the window has no owning thread any more.
+            var threadId = GetWindowThreadProcessId(hwnd, out var pid);
+            if (threadId == 0 || pid == 0)
             {
                 return true;
             }
@@ -189,8 +191,8 @@ public sealed class SingleInstance : IDisposable
         return found;
     }
 
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern int GetClassName(IntPtr hwnd, System.Text.StringBuilder className, int maxCount);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetClassNameW")]
+    private static extern int GetClassName(IntPtr hwnd, [Out] char[] className, int maxCount);
 
     [DllImport("user32.dll")]
     private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
@@ -199,12 +201,6 @@ public sealed class SingleInstance : IDisposable
 
     [DllImport("user32.dll")]
     private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern int GetWindowText(IntPtr hwnd, System.Text.StringBuilder text, int maxCount);
-
-    [DllImport("user32.dll")]
-    private static extern int GetWindowTextLength(IntPtr hwnd);
 
     /// <summary>
     /// Called from the window hook for every message. Returns true when the

@@ -7,6 +7,8 @@ namespace CyberPDF.Tests;
 
 public sealed class SearchEngineTests
 {
+    private static readonly int[] TheOffsets = { 0, 12, 24 };
+
     private static PageTextLayer LayerOf(string text)
     {
         var characters = new List<TextCharacter>();
@@ -23,7 +25,7 @@ public sealed class SearchEngineTests
         var matches = SearchEngine.FindInPage(LayerOf("the cat and the dog and the bird"), 0, "the");
 
         Assert.Equal(3, matches.Count);
-        Assert.Equal(new[] { 0, 12, 24 }, matches.Select(m => m.Start).ToArray());
+        Assert.Equal(TheOffsets, matches.Select(m => m.Start).ToArray());
     }
 
     [Fact]

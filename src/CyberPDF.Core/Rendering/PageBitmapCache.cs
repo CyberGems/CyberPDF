@@ -16,10 +16,7 @@ public sealed class PageBitmapCache : IDisposable
 
     public PageBitmapCache(long budgetBytes)
     {
-        if (budgetBytes <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(budgetBytes));
-        }
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(budgetBytes);
         _budgetBytes = budgetBytes;
     }
 

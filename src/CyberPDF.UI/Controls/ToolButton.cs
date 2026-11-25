@@ -31,11 +31,17 @@ public sealed class ToolButton : Control
     public IconKind Icon { get; set; } = IconKind.None;
 
     /// <summary>Optional caption. Empty for icon-only buttons.</summary>
+    // Control.Text is annotated [AllowNull]: it accepts null and returns empty.
+    // The override has to repeat the annotation or the compiler reports a
+    // nullability mismatch that callers would have to work around.
+    [System.Diagnostics.CodeAnalysis.AllowNull]
     public override string Text
     {
         get => base.Text;
         set
         {
+            // Matches Control.Text, which is non-nullable. An icon-only button
+            // leaves this empty instead of passing null.
             base.Text = value ?? string.Empty;
             Invalidate();
         }

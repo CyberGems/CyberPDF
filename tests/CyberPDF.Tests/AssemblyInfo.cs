@@ -17,6 +17,6 @@ namespace CyberPDF.Tests;
 /// these classes.
 /// </summary>
 [CollectionDefinition("pdfium", DisableParallelization = true)]
-public sealed class PdfiumCollection
+public sealed class PdfiumTests
 {
 }
