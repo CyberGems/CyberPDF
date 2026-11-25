@@ -33,6 +33,8 @@ impresión todavía no están implementados.
 - Busca en todo el documento con cada coincidencia resaltada y la activa en un
   color más fuerte; `Ctrl+F` abre la barra, `Enter` y `Shift+Enter` recorren las
   coincidencias
+- Panel lateral con miniaturas de las páginas y los marcadores del documento,
+  `F4` para mostrarlo; haz clic en cualquiera para saltar a esa página
 - Una sola ventana por sesión: abrir un segundo PDF lo entrega a la ventana activa
 - Zoom de 10% a 800%, ajustar al ancho, volver al 100%
 - Rotación en pasos de 90 grados
@@ -123,6 +125,7 @@ CyberPDF.exe --shot salida.png documento.pdf
 | `Alt+W` | Ajustar al ancho |
 | `Alt+T` | Cambiar tema |
 | `Ctrl+F` | Buscar en el documento |
+| `F4` | Miniaturas y marcadores |
 | `F3` | Siguiente coincidencia |
 | `Shift+F3` | Coincidencia anterior |
 | `Ctrl+C` | Copiar la selección |

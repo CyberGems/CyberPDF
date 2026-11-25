@@ -42,11 +42,26 @@ internal static class ScreenshotProbe
     /// guess: the first page needs at least one round trip through the PDFium
     /// thread plus a UI marshal, and pages arrive band by band.
     /// </summary>
-    public static async Task CaptureAsync(MainWindow window, string path, bool selectText = false, string? searchTerm = null)
+    public static async Task CaptureAsync(
+        MainWindow window,
+        string path,
+        bool selectText = false,
+        string? searchTerm = null,
+        int? panelTab = null)
     {
         Theme.Apply(Theme.CurrentTheme);
 
-        if (searchTerm is not null)
+        if (panelTab is int tab)
+        {
+            // Opt into the side panel and give the thumbnails time to render.
+            window.ShowSidePanel(tab);
+            for (var i = 0; i < 40 && window.SidePanelReadyCount == 0; i++)
+            {
+                await Task.Delay(100);
+            }
+            await Task.Delay(600);
+        }
+        else if (searchTerm is not null)
         {
             // A search screenshot has to run the search and wait for extraction,
             // which happens page by page on the PDFium thread.

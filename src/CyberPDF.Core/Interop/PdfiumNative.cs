@@ -147,6 +147,36 @@ internal static partial class PdfiumNative
     internal static partial bool FPDFText_GetCharBox(
         nint textPage, int index, out double left, out double right, out double bottom, out double top);
 
+    // --- Bookmarks ----------------------------------------------------------
+
+    [LibraryImport(Library)]
+    internal static partial nint FPDFBookmark_GetFirstChild(nint document, nint bookmark);
+
+    [LibraryImport(Library)]
+    internal static partial nint FPDFBookmark_GetNextSibling(nint document, nint bookmark);
+
+    /// <summary>
+    /// Copies the bookmark title as UTF-16LE including its terminator and
+    /// returns the byte length, or the required length when the buffer is null.
+    /// </summary>
+    [LibraryImport(Library)]
+    internal static partial uint FPDFBookmark_GetTitle(nint bookmark, nint buffer, uint length);
+
+    [LibraryImport(Library)]
+    internal static partial nint FPDFBookmark_GetDest(nint document, nint bookmark);
+
+    [LibraryImport(Library)]
+    internal static partial nint FPDFBookmark_GetAction(nint bookmark);
+
+    [LibraryImport(Library)]
+    internal static partial int FPDFBookmark_GetCount(nint bookmark);
+
+    [LibraryImport(Library)]
+    internal static partial nint FPDFAction_GetDest(nint document, nint action);
+
+    [LibraryImport(Library)]
+    internal static partial int FPDFDest_GetDestPageIndex(nint document, nint dest);
+
     /// <summary>PDFium's own size struct: two consecutive floats.</summary>
     [StructLayout(LayoutKind.Sequential)]
     internal struct FsSizeF

@@ -91,6 +91,15 @@ public sealed class PdfEngine : IDisposable
     }
 
     /// <summary>
+    /// Reads the document outline on the PDFium thread.
+    /// </summary>
+    public bool GetBookmarks(PdfDocument document, Action<IReadOnlyList<BookmarkEntry>> completed, Action<Exception>? onError = null)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        return Enqueue(new BookmarkWorkItem(document, completed, onError));
+    }
+
+    /// <summary>
     /// Destroys the document on the PDFium thread, after every request already
     /// queued for it. Closing from the UI thread would race the renderer.
     /// </summary>
@@ -387,6 +396,35 @@ public sealed class PdfEngine : IDisposable
             if (TrySettle())
             {
                 _completed(layer);
+            }
+        }
+
+        public override void Fail(Exception error) => _onError?.Invoke(error);
+    }
+
+    private sealed class BookmarkWorkItem : WorkItem
+    {
+        private readonly PdfDocument _document;
+        private readonly Action<IReadOnlyList<BookmarkEntry>> _completed;
+        private readonly Action<Exception>? _onError;
+
+        public BookmarkWorkItem(PdfDocument document, Action<IReadOnlyList<BookmarkEntry>> completed, Action<Exception>? onError)
+        {
+            _document = document;
+            _completed = completed;
+            _onError = onError;
+        }
+
+        public override void Run(PdfEngine engine)
+        {
+            if (_document.IsDisposed)
+            {
+                return;
+            }
+            var bookmarks = BookmarkReader.Read(_document);
+            if (TrySettle())
+            {
+                _completed(bookmarks);
             }
         }
 

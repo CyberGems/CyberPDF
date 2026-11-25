@@ -92,6 +92,11 @@ public static class Icons
                 }
                 break;
 
+            case IconKind.SidePanel:
+                g.DrawRectangle(pen, 2.5f, 3.5f, 11f, 9f);
+                g.DrawLine(pen, 7f, 3.5f, 7f, 12.5f);
+                break;
+
             case IconKind.Close:
                 g.DrawLine(pen, 4, 4, 12, 12);
                 g.DrawLine(pen, 12, 4, 4, 12);
@@ -156,6 +161,7 @@ public enum IconKind
     PreviousPage,
     NextPage,
     Search,
+    SidePanel,
     Copy,
     Minimize,
     Maximize,

@@ -186,6 +186,27 @@ public sealed class PageViewer : Control
         ViewStateChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>
+    /// Rebuilds the layout at the current zoom, keeping the visible page. Used
+    /// when the client width changes without a zoom change, which happens when
+    /// the side panel opens or closes.
+    /// </summary>
+    public void RefreshLayout()
+    {
+        if (_document is null)
+        {
+            return;
+        }
+        var anchorPage = FirstVisiblePage;
+        var anchorOffset = 0;
+        if (_layout is { Slots.Count: > 0 })
+        {
+            anchorOffset = _scrollY - _layout.Slots[anchorPage].Top;
+        }
+        RebuildLayout(anchorPage, anchorOffset);
+        ViewStateChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     public void SetRotation(int degrees)
     {
         var normalized = ((degrees % 360) + 360) % 360;

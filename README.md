@@ -28,6 +28,8 @@ implemented yet.
 - Select and copy text: drag, double click for a word, triple click for a line
 - Search the whole document with every match highlighted and the active one in
   a stronger color; `Ctrl+F` opens the bar, `Enter` and `Shift+Enter` walk matches
+- A side panel with page thumbnails and the document's bookmarks, `F4` to show
+  it; click either to jump to that page
 - One window per session: opening a second PDF hands it to the running window
 - Zoom from 10% to 800%, fit width, 100% reset
 - Rotation in 90 degree steps
@@ -116,6 +118,7 @@ CyberPDF.exe --shot out.png document.pdf
 | `Alt+W` | Fit width |
 | `Alt+T` | Change theme |
 | `Ctrl+F` | Search in the document |
+| `F4` | Thumbnails and bookmarks |
 | `F3` | Next match |
 | `Shift+F3` | Previous match |
 | `Ctrl+C` | Copy the selection |

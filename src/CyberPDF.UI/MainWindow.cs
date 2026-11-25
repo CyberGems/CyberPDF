@@ -50,6 +50,8 @@ public sealed class MainWindow : Form
     private readonly ToolButton _minimizeButton = new();
     private readonly ToolButton _maximizeButton = new();
     private readonly ToolButton _closeButton = new();
+    private readonly ToolButton _sidePanelButton = new();
+    private readonly SidePanel _sidePanel;
     private ThemedToolTip? _toolTip;
 
     private PdfDocument? _document;
@@ -66,6 +68,7 @@ public sealed class MainWindow : Form
         _settings = settings;
         _store = store;
         _viewer = new PageViewer(engine);
+        _sidePanel = new SidePanel(engine);
 
         SuspendLayout();
 
@@ -118,6 +121,7 @@ public sealed class MainWindow : Form
         _titleLabel.Padding = new Padding(12, 0, 0, 0);
         _titleLabel.ForeColor = Theme.Text;
         _searchBar.BackColor = Theme.Surface;
+        _sidePanel.BackColor = Theme.Surface;
         _searchField.BackColor = Theme.Canvas;
         _searchField.ForeColor = Theme.Text;
         _searchResults.ForeColor = Theme.TextMuted;
@@ -184,8 +188,10 @@ public sealed class MainWindow : Form
         ConfigureButton(_copyButton, IconKind.Copy, Strings.Get("Copy"), CopySelection);
         _copyButton.Enabled = false;
         ConfigureButton(_searchButton, IconKind.Search, null, OpenSearch);
+        ConfigureButton(_sidePanelButton, IconKind.SidePanel, null, ToggleSidePanel);
 
         flow.Controls.Add(_openButton);
+        flow.Controls.Add(_sidePanelButton);
         flow.Controls.Add(Separator());
         flow.Controls.Add(_zoomOutButton);
         flow.Controls.Add(_zoomInButton);
@@ -571,7 +577,23 @@ public sealed class MainWindow : Form
         Cursor.Position = originalCursor;
         Application.DoEvents();
 
-        // 5. Tooltips are attached to every icon-only control, and the tip for
+        // 5. The side panel: opening it must read the outline and render at
+        //    least one miniature, on a document that has both.
+        if (Environment.GetCommandLineArgs().Any(a => a.Equals("--panel", StringComparison.OrdinalIgnoreCase)))
+        {
+            ToggleSidePanel();
+            for (var i = 0; i < 60 && _sidePanel.BookmarkCount == 0 && _sidePanel.ThumbnailCount == 0; i++)
+            {
+                Application.DoEvents();
+                Thread.Sleep(100);
+            }
+            Console.Error.WriteLine(
+                $"SHELL: panel visible={_sidePanel.Visible} bookmarks={_sidePanel.BookmarkCount} " +
+                $"thumbs={_sidePanel.ThumbnailCount} mode={_sidePanel.Mode} " +
+                $"panelBounds={_sidePanel.Bounds} viewerWidth={_viewer.ClientSize.Width}");
+        }
+
+        // 6. Tooltips are attached to every icon-only control, and the tip for
         //    the first toolbar button paints with the current palette.
         Console.Error.WriteLine($"SHELL: tooltips={_toolTip is not null} attachments={_toolTip?.Count ?? 0}");
         if (Environment.GetCommandLineArgs().Any(a => a.Equals("--tooltip-shot", StringComparison.OrdinalIgnoreCase)))
@@ -691,8 +713,13 @@ public sealed class MainWindow : Form
         // scrollbar painted on top of the page and the document opened partly
         // hidden under the chrome. The same rule orders the top chrome, so the
         // title strip is added last and lands on the very top.
+        _sidePanel.Dock = DockStyle.Left;
+        _sidePanel.Width = 190;
+        _sidePanel.Visible = false;
+
         host.Controls.Add(_viewer);
         host.Controls.Add(_scrollBar);
+        host.Controls.Add(_sidePanel);
 
         Controls.Add(host);
         Controls.Add(_statusBar);
@@ -718,6 +745,7 @@ public sealed class MainWindow : Form
         _toolTip.Attach(_rotateRightButton, () => Strings.Get("RotateRight"), () => "Ctrl+R");
         _toolTip.Attach(_copyButton, () => Strings.Get("Copy"), () => "Ctrl+C");
         _toolTip.Attach(_searchButton, () => Strings.Get("Search"), () => "Ctrl+F");
+        _toolTip.Attach(_sidePanelButton, () => Strings.Get("ToggleSidePanel"), () => "F4");
         _toolTip.Attach(_themeButton, () => Strings.Get("ChangeTheme"), () => "Alt+T");
         _toolTip.Attach(_minimizeButton, () => Strings.Get("Minimize"), null);
         _toolTip.Attach(_maximizeButton,
@@ -747,6 +775,15 @@ public sealed class MainWindow : Form
         };
 
         _viewer.SelectionChanged += (_, _) => UpdateSelectionState();
+        _viewer.ViewStateChanged += (_, _) =>
+        {
+            if (_sidePanel.Visible)
+            {
+                _sidePanel.SetCurrentPage(_viewer.FirstVisiblePage);
+                _sidePanel.EnsureAround(_viewer.FirstVisiblePage);
+            }
+        };
+        _sidePanel.PageRequested += (_, page) => _viewer.ScrollToPage(page);
         _viewer.SearchChanged += (_, _) => UpdateSearchState();
         _viewer.MouseUp += ViewerMouseUpForContextMenu;
 
@@ -817,6 +854,7 @@ public sealed class MainWindow : Form
         _documentPath = path;
 
         _viewer.SetDocument(_document);
+        _sidePanel.SetDocument(_sidePanel.Visible ? _document : null);
 
         // First view: fit the page width, but never zoom past 100%. A document
         // whose page is taller than the screen (an exported web page, a poster)
@@ -961,6 +999,38 @@ public sealed class MainWindow : Form
         _searchField.Focus();
         _searchField.SelectAll();
         RescaleChrome();
+    }
+
+    /// <summary>Shows or hides the thumbnails and bookmarks panel.</summary>
+    private void ToggleSidePanel()
+    {
+        if (_document is null)
+        {
+            return;
+        }
+
+        _sidePanel.Visible = !_sidePanel.Visible;
+        if (_sidePanel.Visible)
+        {
+            _sidePanel.SetDocument(_document);
+            _sidePanel.SetCurrentPage(_viewer.FirstVisiblePage);
+            _sidePanel.EnsureAround(_viewer.FirstVisiblePage);
+            _sidePanel.LoadBookmarks();
+        }
+
+        // The panel narrows the viewer. Without a refit a page wider than the new
+        // client area stays anchored where it was and ends up clipped on the
+        // right, so the width is refitted here; an explicit zoom is preserved.
+        if (!_userZoomed)
+        {
+            FitWidthOnOpen();
+        }
+        else
+        {
+            _viewer.RefreshLayout();
+            _viewer.ScrollTo(_viewer.ScrollY);
+        }
+        _viewer.Focus();
     }
 
     private void CloseSearch()
@@ -1214,6 +1284,11 @@ public sealed class MainWindow : Form
         _rotateRightButton.Enabled = hasDocument;
         _copyButton.Enabled = hasDocument && _viewer.HasSelection;
         _searchButton.Enabled = hasDocument;
+        _sidePanelButton.Enabled = hasDocument;
+        if (!hasDocument && _sidePanel.Visible)
+        {
+            _sidePanel.Visible = false;
+        }
         if (!hasDocument && _searchBar.Visible)
         {
             CloseSearch();
@@ -1405,6 +1480,10 @@ public sealed class MainWindow : Form
                 OpenSearch();
                 e.Handled = true;
                 break;
+            case Keys.F4:
+                ToggleSidePanel();
+                e.Handled = true;
+                break;
             case Keys.F3 when e.Shift:
                 _viewer.GoToPreviousMatch();
                 e.Handled = true;
@@ -1558,6 +1637,29 @@ public sealed class MainWindow : Form
 
     /// <summary>Matches found by the last self-test search.</summary>
     internal int SelfTestMatchCount => _viewer.MatchCount;
+
+    /// <summary>Shows the side panel on a tab, for screenshot verification.</summary>
+    internal void ShowSidePanel(int tab)
+    {
+        if (_document is null)
+        {
+            return;
+        }
+        if (!_sidePanel.Visible)
+        {
+            ToggleSidePanel();
+        }
+        _sidePanel.SetTab(tab);
+    }
+
+    /// <summary>
+    /// Rows the panel has ready: miniatures on the pages tab, outline entries on
+    /// the bookmarks tab. A capture waits on whichever tab is open, so a search
+    /// screenshot never records an empty list that was still loading.
+    /// </summary>
+    internal int SidePanelReadyCount => _sidePanel.Mode == 0
+        ? _sidePanel.ThumbnailCount
+        : _sidePanel.BookmarkCount;
 
     /// <summary>Attaches the single-instance helper so WndProc can route to it.</summary>
     public void AttachSingleInstance(SingleInstance singleInstance)

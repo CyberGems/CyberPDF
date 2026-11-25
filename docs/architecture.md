@@ -95,7 +95,6 @@ them, the single-file bundle was dropped.
 Phase 0 is a working reader. Missing, in rough order of value:
 
 - Tabs
-- Thumbnails and bookmarks
 - Password entry for protected documents (detection already maps the error)
 - Links
 - Printing

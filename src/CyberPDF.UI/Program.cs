@@ -96,6 +96,8 @@ internal static class Program
             var withSelection = args.Any(a => a.Equals("--select", StringComparison.OrdinalIgnoreCase));
             var searchArg = args.FirstOrDefault(a => a.StartsWith("--search=", StringComparison.OrdinalIgnoreCase));
             var searchTerm = searchArg?.Substring("--search=".Length);
+            var panelArg = args.FirstOrDefault(a => a.StartsWith("--panel=", StringComparison.OrdinalIgnoreCase));
+            int? panelTab = panelArg is null ? null : int.Parse(panelArg.Substring("--panel=".Length));
             window.Shown += async (_, _) =>
             {
                 // Opening is asynchronous (the document is loaded on the PDFium
@@ -104,7 +106,7 @@ internal static class Program
                 {
                     await Task.Delay(100);
                 }
-                await ScreenshotProbe.CaptureAsync(window, shotPath, withSelection, searchTerm);
+                await ScreenshotProbe.CaptureAsync(window, shotPath, withSelection, searchTerm, panelTab);
                 window.Close();
             };
         }

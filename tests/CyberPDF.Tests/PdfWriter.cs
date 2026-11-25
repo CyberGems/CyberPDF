@@ -14,14 +14,30 @@ internal static class PdfWriter
     /// page. Page size is A4 in points.
     /// </summary>
     public static string Write(string path, int pages, int linesPerPage = 20, int rotate = 0)
+        => WriteDocument(path, pages, linesPerPage, rotate, outline: null);
+
+    /// <summary>
+    /// Builds a document with a two level outline: a chapter on the first page,
+    /// a section under it on the second, and a second chapter on the last page.
+    /// </summary>
+    public static string WriteWithOutline(string path, int pages)
+        => WriteDocument(path, pages, 1, 0, outline: new OutlinePlan(pages));
+
+    private sealed record OutlinePlan(int Pages);
+
+    private static string WriteDocument(string path, int pages, int linesPerPage, int rotate, OutlinePlan? outline)
     {
         var objects = new SortedDictionary<int, byte[]>();
 
-        objects[1] = Encoding.ASCII.GetBytes("<</Type/Catalog/Pages 2 0 R>>");
+        var fontId = 3 + pages * 2;
+        var catalog = outline is null
+            ? "<</Type/Catalog/Pages 2 0 R>>"
+            : $"<</Type/Catalog/Pages 2 0 R/Outlines {fontId + 1} 0 R>>";
+        objects[1] = Encoding.ASCII.GetBytes(catalog);
+
         var kids = string.Join(" ", Enumerable.Range(0, pages).Select(i => $"{3 + i * 2} 0 R"));
         objects[2] = Encoding.ASCII.GetBytes($"<</Type/Pages/Count {pages}/Kids[{kids}]>>");
 
-        var fontId = 3 + pages * 2;
         for (var i = 0; i < pages; i++)
         {
             var pageId = 3 + i * 2;
@@ -47,10 +63,31 @@ internal static class PdfWriter
 
         objects[fontId] = Encoding.ASCII.GetBytes("<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>");
 
+        if (outline is not null)
+        {
+            var root = fontId + 1;
+            var chapterOne = root + 1;
+            var section = chapterOne + 1;
+            var chapterTwo = section + 1;
+            var firstPage = 3;
+            var secondPage = 5;
+            var lastPage = 3 + (outline.Pages - 1) * 2;
+
+            objects[root] = Encoding.ASCII.GetBytes(
+                $"<</Type/Outlines/First {chapterOne} 0 R/Last {chapterTwo} 0 R/Count 3>>");
+            objects[chapterOne] = Encoding.ASCII.GetBytes(
+                $"<</Title(Chapter 1)/Parent {root} 0 R/First {section} 0 R/Last {section} 0 R" +
+                $"/Next {chapterTwo} 0 R/Dest[{firstPage} 0 R/XYZ 0 842 0]/Count 1>>");
+            objects[section] = Encoding.ASCII.GetBytes(
+                $"<</Title(Section 1.1)/Parent {chapterOne} 0 R/Dest[{secondPage} 0 R/XYZ 0 842 0]>>");
+            objects[chapterTwo] = Encoding.ASCII.GetBytes(
+                $"<</Title(Chapter 2)/Parent {root} 0 R/Prev {chapterOne} 0 R" +
+                $"/Dest[{lastPage} 0 R/XYZ 0 842 0]>>");
+        }
+
         using var output = new FileStream(path, FileMode.Create, FileAccess.Write);
         var offsets = new Dictionary<int, long>();
-        var header = Encoding.ASCII.GetBytes("%PDF-1.7\n");
-        output.Write(header);
+        output.Write(Encoding.ASCII.GetBytes("%PDF-1.7\n"));
 
         foreach (var (id, body) in objects)
         {
