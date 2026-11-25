@@ -593,7 +593,40 @@ public sealed class MainWindow : Form
                 $"panelBounds={_sidePanel.Bounds} viewerWidth={_viewer.ClientSize.Width}");
         }
 
-        // 6. Tooltips are attached to every icon-only control, and the tip for
+        // 6. Toggling the panel mid-document must keep the page under the reader.
+        if (Environment.GetCommandLineArgs().Any(a => a.Equals("--panel-scroll", StringComparison.OrdinalIgnoreCase)))
+        {
+            _viewer.ScrollToPage(_viewer.LayoutSlots.Count > 3 ? 3 : 0);
+            Application.DoEvents();
+            var pageBefore = _viewer.FirstVisiblePage;
+            var scrollBefore = _viewer.ScrollY;
+            var wasOpen = _sidePanel.Visible;
+            SetSidePanelVisible(!wasOpen, persist: false);
+            Application.DoEvents();
+            Console.Error.WriteLine(
+                $"SHELL: togglePanel page {pageBefore}->{_viewer.FirstVisiblePage} " +
+                $"scroll {scrollBefore}->{_viewer.ScrollY} frame={_viewer.ClientSize.Width}x{_viewer.ClientSize.Height}");
+            SetSidePanelVisible(wasOpen, persist: false);
+        }
+
+        // 7. Panel persistence: the state is written and read back from the same
+        //    file the next launch uses.
+        if (Environment.GetCommandLineArgs().Any(a => a.Equals("--panel-persist", StringComparison.OrdinalIgnoreCase)))
+        {
+            ShowSidePanel(1);
+            _sidePanel.Width = 240;
+            _settings.SidePanelWidth = 240;
+            _settings.SidePanelTab = 1;
+            _settings.SidePanelOpen = true;
+            _store.Save(_settings);
+
+            var reloaded = new SettingsStore(_store.FilePath).Load();
+            Console.Error.WriteLine(
+                $"SHELL: persist open={reloaded.SidePanelOpen} tab={reloaded.SidePanelTab} " +
+                $"width={reloaded.SidePanelWidth} applied={_sidePanel.Width} mode={_sidePanel.Mode}");
+        }
+
+        // 7. Tooltips are attached to every icon-only control, and the tip for
         //    the first toolbar button paints with the current palette.
         Console.Error.WriteLine($"SHELL: tooltips={_toolTip is not null} attachments={_toolTip?.Count ?? 0}");
         if (Environment.GetCommandLineArgs().Any(a => a.Equals("--tooltip-shot", StringComparison.OrdinalIgnoreCase)))
@@ -784,6 +817,13 @@ public sealed class MainWindow : Form
             }
         };
         _sidePanel.PageRequested += (_, page) => _viewer.ScrollToPage(page);
+        _sidePanel.ModeChanged += (_, _) =>
+        {
+            _settings.SidePanelTab = _sidePanel.Mode;
+            _store.Save(_settings);
+        };
+        _sidePanel.ResizeRequested += (_, width) => ResizeSidePanel(width);
+        _sidePanel.ResizeCompleted += (_, _) => _store.Save(_settings);
         _viewer.SearchChanged += (_, _) => UpdateSearchState();
         _viewer.MouseUp += ViewerMouseUpForContextMenu;
 
@@ -854,7 +894,8 @@ public sealed class MainWindow : Form
         _documentPath = path;
 
         _viewer.SetDocument(_document);
-        _sidePanel.SetDocument(_sidePanel.Visible ? _document : null);
+        _sidePanel.SetDocument(null);
+        _sidePanel.Width = _settings.SidePanelWidth;
 
         // First view: fit the page width, but never zoom past 100%. A document
         // whose page is taller than the screen (an exported web page, a poster)
@@ -870,6 +911,17 @@ public sealed class MainWindow : Form
         InvalidateTitleBar();
         RememberRecent(path);
         ApplyStoredViewState(path);
+
+        // After the stored zoom, so restoring the panel does not fight it.
+        if (_settings.SidePanelOpen)
+        {
+            SetSidePanelVisible(true, persist: false);
+        }
+        else
+        {
+            _sidePanel.Visible = false;
+        }
+
         SyncScrollBar();
         UpdateCommandStates();
         UpdateStatus();
@@ -921,6 +973,31 @@ public sealed class MainWindow : Form
         _userZoomed = false;
         _viewer.SetZoom(_zoom, keepCenter: false);
         _viewer.ScrollTo(0);
+    }
+
+    /// <summary>
+    /// Recomputes fit-width without touching the scroll offset or the stored
+    /// position. Used when the panel changes the client width on an already
+    /// open document, where scrolling back to the top would lose the reader.
+    /// </summary>
+    private void RefitWidth()
+    {
+        if (_document is null)
+        {
+            return;
+        }
+        var previous = _viewer.ScrollY;
+        var page = _viewer.FirstVisiblePage;
+        _zoom = Math.Clamp(Math.Min(FitWidthZoomFor(page), 1f), 0.1f, 8f);
+        _viewer.SetZoom(_zoom, keepCenter: false);
+        _viewer.RefreshLayout();
+
+        // RebuildLayout keeps the visible page but not the pixel offset inside
+        // it, so the scroll is restored against the new slot top.
+        _viewer.ScrollToPage(page);
+        _viewer.ScrollTo(_viewer.LayoutSlots.Count > page
+            ? _viewer.ScrollY + (previous - _viewer.LayoutSlots[page].Top)
+            : previous);
     }
 
     /// <summary>
@@ -1009,10 +1086,26 @@ public sealed class MainWindow : Form
             return;
         }
 
-        _sidePanel.Visible = !_sidePanel.Visible;
-        if (_sidePanel.Visible)
+        SetSidePanelVisible(!_sidePanel.Visible, persist: true);
+    }
+
+    /// <summary>
+    /// Opens or closes the panel and remembers the choice. The same path is used
+    /// when a document opens, so a panel left open comes back without the user
+    /// asking twice.
+    /// </summary>
+    private void SetSidePanelVisible(bool visible, bool persist)
+    {
+        if (_document is null)
+        {
+            return;
+        }
+
+        _sidePanel.Visible = visible;
+        if (visible)
         {
             _sidePanel.SetDocument(_document);
+            _sidePanel.SetTab(_settings.SidePanelTab);
             _sidePanel.SetCurrentPage(_viewer.FirstVisiblePage);
             _sidePanel.EnsureAround(_viewer.FirstVisiblePage);
             _sidePanel.LoadBookmarks();
@@ -1020,17 +1113,52 @@ public sealed class MainWindow : Form
 
         // The panel narrows the viewer. Without a refit a page wider than the new
         // client area stays anchored where it was and ends up clipped on the
-        // right, so the width is refitted here; an explicit zoom is preserved.
+        // right, so the width is refitted here. The scroll position survives:
+        // toggling the panel must not send the reader back to the first page.
         if (!_userZoomed)
         {
-            FitWidthOnOpen();
+            RefitWidth();
         }
         else
         {
             _viewer.RefreshLayout();
-            _viewer.ScrollTo(_viewer.ScrollY);
+        }
+
+        if (persist)
+        {
+            _settings.SidePanelOpen = visible;
+            _store.Save(_settings);
         }
         _viewer.Focus();
+    }
+
+    /// <summary>
+    /// Applies a width dragged on the panel edge, clamped so the document keeps a
+    /// usable sliver of the window.
+    /// </summary>
+    private void ResizeSidePanel(int width)
+    {
+        var scale = DeviceDpi / 96f;
+        var minimum = (int)Math.Round(AppSettings.MinSidePanelWidth * scale);
+        var maximum = (int)Math.Round(AppSettings.MaxSidePanelWidth * scale);
+        var windowLimit = Math.Max(minimum, ClientSize.Width - (int)Math.Round(320 * scale));
+        var clamped = Math.Clamp(width, minimum, Math.Min(maximum, windowLimit));
+        if (clamped == _sidePanel.Width)
+        {
+            return;
+        }
+
+        _sidePanel.Width = clamped;
+        if (!_userZoomed)
+        {
+            RefitWidth();
+        }
+        else
+        {
+            _viewer.RefreshLayout();
+        }
+
+        _settings.SidePanelWidth = clamped;
     }
 
     private void CloseSearch()

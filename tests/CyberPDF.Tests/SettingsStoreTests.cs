@@ -136,6 +136,44 @@ public sealed class SettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public void SidePanelStateSurvivesTheRoundTrip()
+    {
+        var store = new SettingsStore(_file);
+        store.Save(new AppSettings { SidePanelOpen = true, SidePanelTab = 1, SidePanelWidth = 240 });
+
+        var loaded = store.Load();
+
+        Assert.True(loaded.SidePanelOpen);
+        Assert.Equal(1, loaded.SidePanelTab);
+        Assert.Equal(240, loaded.SidePanelWidth);
+    }
+
+    [Theory]
+    [InlineData(0, 190)]
+    [InlineData(40, 190)]
+    [InlineData(9000, 190)]
+    [InlineData(300, 300)]
+    public void SidePanelWidthOutsideTheRangeFallsBack(int stored, int expected)
+    {
+        File.WriteAllText(_file, $"{{\"sidePanelWidth\":{stored}}}");
+        var settings = new SettingsStore(_file).Load();
+
+        Assert.Equal(expected, settings.SidePanelWidth);
+    }
+
+    [Theory]
+    [InlineData(-1, 0)]
+    [InlineData(7, 0)]
+    [InlineData(1, 1)]
+    public void SidePanelTabOutsideTheRangeFallsBackToPages(int stored, int expected)
+    {
+        File.WriteAllText(_file, $"{{\"sidePanelTab\":{stored}}}");
+        var settings = new SettingsStore(_file).Load();
+
+        Assert.Equal(expected, settings.SidePanelTab);
+    }
+
+    [Fact]
     public void SaveCreatesTheDirectoryWhenMissing()
     {
         var nested = Path.Combine(_directory, "nested", "deeper", "settings.json");

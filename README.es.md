@@ -34,7 +34,9 @@ impresión todavía no están implementados.
   color más fuerte; `Ctrl+F` abre la barra, `Enter` y `Shift+Enter` recorren las
   coincidencias
 - Panel lateral con miniaturas de las páginas y los marcadores del documento,
-  `F4` para mostrarlo; haz clic en cualquiera para saltar a esa página
+  `F4` para mostrarlo y arrastra su borde para cambiar el ancho; haz clic en
+  cualquiera para saltar a esa página
+- El panel, su pestaña y su ancho vuelven en el siguiente inicio, igual que el tema
 - Una sola ventana por sesión: abrir un segundo PDF lo entrega a la ventana activa
 - Zoom de 10% a 800%, ajustar al ancho, volver al 100%
 - Rotación en pasos de 90 grados
@@ -91,10 +93,13 @@ Requisitos: Windows 10 1803 o posterior, .NET SDK 10, y PowerShell 5.1 o posteri
 dotnet build CyberPDF.slnx -c Release
 ./src/CyberPDF.UI/bin/Release/net10.0-windows/CyberPDF.exe
 
+# Ejecutar sin compilar aparte, con un documento opcional
+dotnet run --project src/CyberPDF.UI/CyberPDF.UI.csproj -c Release -- documento.pdf
+
 # Pruebas
 dotnet test CyberPDF.slnx -c Release
 
-# Compilación autocontenida en un solo archivo
+# Compilación autocontenida en carpeta
 ./scripts/Publish-CyberPDF.ps1
 ```
 

@@ -23,7 +23,8 @@ All notable changes to CyberPDF are documented here. The format follows
   one in a stronger color, F3 and Shift+Enter walk the hits and the view scrolls
   to each one
 - Side panel with page thumbnails, generated around the visible page instead of
-  up front, and the document's bookmarks with their nesting
+  up front, and the document's bookmarks with their nesting. Its state, tab and
+  width come back on the next launch, and its edge can be dragged
 - Window chrome with minimize, maximize and close, drag by the native title strip
   (Snap included), and themed tooltips that show each shortcut
 - One window per session: opening another PDF in Explorer hands it to the running
@@ -56,7 +57,8 @@ All notable changes to CyberPDF are documented here. The format follows
   vista se desplaza hasta cada uno
 - Panel lateral con miniaturas de las páginas, generadas alrededor de la página
   visible en lugar de todas de una vez, y los marcadores del documento con su
-  anidación
+  anidación. Su estado, pestaña y ancho vuelven en el siguiente inicio, y su
+  borde se puede arrastrar
 - Barra de ventana con minimizar, maximizar y cerrar, arrastre por la franja
   nativa del título (incluye Snap) y tooltips temáticos con cada atajo
 - Una sola ventana por sesión: abrir otro PDF desde el Explorador lo entrega a la

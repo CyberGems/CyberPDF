@@ -29,7 +29,8 @@ implemented yet.
 - Search the whole document with every match highlighted and the active one in
   a stronger color; `Ctrl+F` opens the bar, `Enter` and `Shift+Enter` walk matches
 - A side panel with page thumbnails and the document's bookmarks, `F4` to show
-  it; click either to jump to that page
+  it, drag its edge to resize; click either to jump to that page
+- The panel, its tab and its width come back on the next launch, like the theme
 - One window per session: opening a second PDF hands it to the running window
 - Zoom from 10% to 800%, fit width, 100% reset
 - Rotation in 90 degree steps
@@ -84,10 +85,13 @@ Requirements: Windows 10 1803 or later, .NET SDK 10, and PowerShell 5.1 or later
 dotnet build CyberPDF.slnx -c Release
 ./src/CyberPDF.UI/bin/Release/net10.0-windows/CyberPDF.exe
 
+# Run without building separately, optionally opening a document
+dotnet run --project src/CyberPDF.UI/CyberPDF.UI.csproj -c Release -- document.pdf
+
 # Tests
 dotnet test CyberPDF.slnx -c Release
 
-# Self-contained single-file build
+# Self-contained folder build
 ./scripts/Publish-CyberPDF.ps1
 ```
 

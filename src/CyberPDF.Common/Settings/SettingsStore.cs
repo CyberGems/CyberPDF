@@ -91,6 +91,19 @@ public sealed class SettingsStore
             settings.RecentFiles.RemoveRange(AppSettings.MaxRecentFiles, settings.RecentFiles.Count - AppSettings.MaxRecentFiles);
         }
         settings.ViewStates ??= new Dictionary<string, DocumentViewState>(StringComparer.OrdinalIgnoreCase);
+
+        // A width outside the allowed range, or a tab that does not exist, comes
+        // from a hand-edited file or an older build; fall back to the defaults
+        // instead of opening a panel of zero width.
+        if (settings.SidePanelWidth < AppSettings.MinSidePanelWidth
+            || settings.SidePanelWidth > AppSettings.MaxSidePanelWidth)
+        {
+            settings.SidePanelWidth = 190;
+        }
+        if (settings.SidePanelTab is < 0 or > 1)
+        {
+            settings.SidePanelTab = 0;
+        }
     }
 
     /// <summary>Maps the stored language to a supported value, following Windows when unset.</summary>

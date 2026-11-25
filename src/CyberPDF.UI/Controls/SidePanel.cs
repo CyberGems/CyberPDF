@@ -31,6 +31,11 @@ public sealed class SidePanel : Control
     private readonly Dictionary<int, Bitmap> _thumbCache = new();
     private readonly List<int> _thumbOrder = new();
     private readonly ThinScrollBar _scroll;
+    private const int SplitterWidth = 5;
+    private bool _resizing;
+    private bool _hoverSplitter;
+    private int _resizeStartX;
+    private int _resizeStartWidth;
 
     private PdfDocument? _document;
     private int _mode; // 0 = thumbnails, 1 = bookmarks
@@ -65,6 +70,16 @@ public sealed class SidePanel : Control
 
     /// <summary>Raised when the current tab changes, so the window can rescale it.</summary>
     public event EventHandler? ModeChanged;
+
+    /// <summary>
+    /// Raised while the user drags the right edge. The window clamps the width
+    /// against its own minimum, because the panel does not know how much room
+    /// the document still needs.
+    /// </summary>
+    public event EventHandler<int>? ResizeRequested;
+
+    /// <summary>Raised once when the drag ends, so the width is written once.</summary>
+    public event EventHandler? ResizeCompleted;
 
     public int Mode => _mode;
 
@@ -336,6 +351,13 @@ public sealed class SidePanel : Control
         }
         g.Restore(state);
 
+        // Splitter: a hot strip on the right edge, slightly brighter on hover so
+        // it reads as draggable instead of as a plain border.
+        var splitterRect = new Rectangle(Width - SplitterWidth, 0, SplitterWidth, Height);
+        using (var splitter = new SolidBrush(_hoverSplitter ? Theme.Hover : Theme.Surface))
+        {
+            g.FillRectangle(splitter, splitterRect);
+        }
         using var border = new Pen(Theme.Border);
         g.DrawLine(border, Width - 1, 0, Width - 1, Height);
     }
@@ -386,7 +408,7 @@ public sealed class SidePanel : Control
                 continue;
             }
 
-            var left = (Width - _scroll.Width - ThumbWidth) / 2;
+            var left = (Width - SplitterWidth - _scroll.Width - ThumbWidth) / 2;
             var paper = new Rectangle(left, rowTop, ThumbWidth, slot.Height);
 
             if (_thumbCache.TryGetValue(slot.PageIndex, out var bitmap))
@@ -472,6 +494,14 @@ public sealed class SidePanel : Control
         {
             return;
         }
+        if (IsOnSplitter(e.X))
+        {
+            _resizing = true;
+            _resizeStartX = PointToScreen(new Point(e.X, 0)).X;
+            _resizeStartWidth = Width;
+            Capture = true;
+            return;
+        }
         if (e.Y < TabHeight)
         {
             SetTab(e.X < Width / 2 ? 0 : 1);
@@ -500,6 +530,26 @@ public sealed class SidePanel : Control
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
+
+        if (_resizing)
+        {
+            var now = PointToScreen(new Point(e.X, 0)).X;
+            ResizeRequested?.Invoke(this, _resizeStartWidth + (now - _resizeStartX));
+            return;
+        }
+
+        var onSplitter = IsOnSplitter(e.X);
+        if (onSplitter != _hoverSplitter)
+        {
+            _hoverSplitter = onSplitter;
+            Cursor = onSplitter ? Cursors.SizeWE : Cursors.Default;
+            Invalidate();
+        }
+        if (onSplitter)
+        {
+            return;
+        }
+
         if (IsBookmarks)
         {
             var index = e.Y < TabHeight
@@ -527,14 +577,29 @@ public sealed class SidePanel : Control
         }
     }
 
+    protected override void OnMouseUp(MouseEventArgs e)
+    {
+        base.OnMouseUp(e);
+        if (_resizing)
+        {
+            _resizing = false;
+            Capture = false;
+            Cursor = Cursors.Default;
+            ResizeCompleted?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
     protected override void OnMouseLeave(EventArgs e)
     {
         base.OnMouseLeave(e);
         _hoverIndex = -1;
         _hoverBookmark = -1;
+        _hoverSplitter = false;
         Cursor = Cursors.Default;
         Invalidate();
     }
+
+    private bool IsOnSplitter(int x) => x >= Width - SplitterWidth;
 
     protected override void OnMouseWheel(MouseEventArgs e)
     {

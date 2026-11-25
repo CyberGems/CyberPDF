@@ -29,6 +29,15 @@ public sealed class AppSettings
 
     public bool RememberPagePosition { get; set; } = true;
 
+    /// <summary>Whether the thumbnails and bookmarks panel is open.</summary>
+    public bool SidePanelOpen { get; set; }
+
+    /// <summary>Panel tab: 0 is pages, 1 is bookmarks.</summary>
+    public int SidePanelTab { get; set; }
+
+    /// <summary>Panel width in device pixels, so a dragged width survives.</summary>
+    public int SidePanelWidth { get; set; } = 190;
+
     /// <summary>
     /// Upper bound for rendered bitmap memory, in megabytes. Sized for a reader:
     /// enough for the visible pages at high zoom plus prefetch, without turning
@@ -43,6 +52,11 @@ public sealed class AppSettings
     public Dictionary<string, DocumentViewState> ViewStates { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
     public const int MaxRecentFiles = 12;
+
+    /// <summary>Panel width limits, in device pixels.</summary>
+    public const int MinSidePanelWidth = 140;
+
+    public const int MaxSidePanelWidth = 480;
 }
 
 /// <summary>Last position inside a document, restored when it is reopened.</summary>
