@@ -8,6 +8,13 @@ Un lector de PDF rápido y liviano para Windows. Nativo, gratuito, y hecho para
 abrirse en menos de medio segundo en lugar de tardar un segundo en mostrar una
 ventana.
 
+## Descargar
+
+Consigue la última compilación en
+[releases](https://github.com/CyberGems/CyberPDF/releases/latest). El instalador no
+necesita permisos de administrador y puede asociar los archivos `.pdf` con
+CyberPDF; el zip portátil es una carpeta que descomprimes y ejecutas.
+
 ## Estado
 
 Fase 0: un lector funcional. Abre un PDF, lo muestra de forma continua, permite

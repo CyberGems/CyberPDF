@@ -7,6 +7,12 @@
 A fast, lightweight PDF reader for Windows. Native, free, and built to start in
 under half a second instead of taking a second to show a window.
 
+## Download
+
+Get the latest build from [releases](https://github.com/CyberGems/CyberPDF/releases/latest).
+The installer needs no administrator rights and can associate `.pdf` files with
+CyberPDF; the portable zip is a folder you unzip and run.
+
 ## Status
 
 Phase 0: a working reader. It opens a PDF, renders it continuously, scrolls,
