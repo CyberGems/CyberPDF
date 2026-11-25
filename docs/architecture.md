@@ -92,12 +92,11 @@ them, the single-file bundle was dropped.
 
 ## What is not implemented yet
 
-Phase 0 is a reader skeleton. Missing, in rough order of value:
+Phase 0 is a working reader. Missing, in rough order of value:
 
 - Tabs
-- Search with highlighting
 - Thumbnails and bookmarks
 - Password entry for protected documents (detection already maps the error)
 - Links
 - Printing
-- Installer and updater
+- Updater

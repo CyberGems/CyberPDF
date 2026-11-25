@@ -9,9 +9,10 @@ under half a second instead of taking a second to show a window.
 
 ## Status
 
-Phase 0: a working reader skeleton. It opens a PDF, renders it continuously,
-scrolls, zooms and rotates, in three themes and two languages. Tabs, search,
-selection, thumbnails, bookmarks and printing are not implemented yet.
+Phase 0: a working reader. It opens a PDF, renders it continuously, scrolls,
+zooms and rotates, selects and copies text, and searches with highlighting, in
+three themes and two languages. Tabs, thumbnails, bookmarks and printing are not
+implemented yet.
 
 ## What works today
 
@@ -19,6 +20,8 @@ selection, thumbnails, bookmarks and printing are not implemented yet.
 - Continuous vertical scrolling with a themed scrollbar, mouse wheel, keyboard
   and middle-button panning
 - Select and copy text: drag, double click for a word, triple click for a line
+- Search the whole document with every match highlighted and the active one in
+  a stronger color; `Ctrl+F` opens the bar, `Enter` and `Shift+Enter` walk matches
 - One window per session: opening a second PDF hands it to the running window
 - Zoom from 10% to 800%, fit width, 100% reset
 - Rotation in 90 degree steps
@@ -103,6 +106,10 @@ CyberPDF.exe --shot out.png document.pdf
 | `Ctrl++` / `Ctrl+-` | Zoom in / out |
 | `Ctrl+0` | Actual size |
 | `Ctrl+R` | Rotate clockwise |
+| `Ctrl+F` | Search in the document |
+| `F3` | Next match |
+| `Ctrl+C` | Copy the selection |
+| `Ctrl+A` | Select the current page |
 | `Ctrl+W` | Close |
 | `F11` | Maximize / restore |
 | `Page Up` / `Page Down` | Scroll a screen |

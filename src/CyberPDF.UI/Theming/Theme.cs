@@ -27,7 +27,9 @@ public static class Theme
         string Pressed,
         string Selection,
         string ScrollThumb,
-        string ScrollThumbHover);
+        string ScrollThumbHover,
+        string SearchMatch,
+        string SearchMatchActive);
 
     private static readonly Dictionary<AppTheme, Palette> Palettes = new()
     {
@@ -47,7 +49,9 @@ public static class Theme
             Pressed: "#233243",
             Selection: "#332AA9B8",
             ScrollThumb: "#2C3B4C",
-            ScrollThumbHover: "#3E536A"),
+            ScrollThumbHover: "#3E536A",
+            SearchMatch: "#66E0B341",
+            SearchMatchActive: "#B3F2A03D"),
 
         [AppTheme.Gray] = new Palette(
             Bg: "#151517",
@@ -65,7 +69,9 @@ public static class Theme
             Pressed: "#32323A",
             Selection: "#33B4BBC4",
             ScrollThumb: "#3A3A42",
-            ScrollThumbHover: "#4E4E58"),
+            ScrollThumbHover: "#4E4E58",
+            SearchMatch: "#66C9A227",
+            SearchMatchActive: "#B3E0B93A"),
 
         [AppTheme.Light] = new Palette(
             Bg: "#F4F1EC",
@@ -83,7 +89,9 @@ public static class Theme
             Pressed: "#E2DCD2",
             Selection: "#331F6F7A",
             ScrollThumb: "#C4BCB0",
-            ScrollThumbHover: "#A9A093"),
+            ScrollThumbHover: "#A9A093",
+            SearchMatch: "#66E8C547",
+            SearchMatchActive: "#B3F2B01E"),
     };
 
     public static AppTheme CurrentTheme { get; private set; } = AppTheme.Default;
@@ -137,6 +145,12 @@ public static class Theme
     public static Color ScrollThumbHover => FromHex(Current.ScrollThumbHover);
 
     public static Color PageShadow => FromHex(Current.PageShadow);
+
+    /// <summary>Search hit highlight, drawn under the selection.</summary>
+    public static Color SearchMatch => FromHex(Current.SearchMatch);
+
+    /// <summary>Highlight for the match the navigation is currently on.</summary>
+    public static Color SearchMatchActive => FromHex(Current.SearchMatchActive);
 
     /// <summary>Paper color. Always white, in every theme: it is the document.</summary>
     public static Color Paper => Color.White;

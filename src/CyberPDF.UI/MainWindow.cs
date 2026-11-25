@@ -39,6 +39,13 @@ public sealed class MainWindow : Form
     private readonly ToolButton _rotateRightButton = new();
     private readonly ToolButton _themeButton = new();
     private readonly ToolButton _copyButton = new();
+    private readonly ToolButton _searchButton = new();
+    private readonly Panel _searchBar = new();
+    private readonly TextBox _searchField = new();
+    private readonly Label _searchResults = new();
+    private readonly ToolButton _searchPreviousButton = new();
+    private readonly ToolButton _searchNextButton = new();
+    private readonly ToolButton _searchCloseButton = new();
 
     private PdfDocument? _document;
     private bool _diagRequested;
@@ -79,6 +86,7 @@ public sealed class MainWindow : Form
 
         BuildTitleBar();
         BuildToolbar();
+        BuildSearchBar();
         BuildStatusBar();
         BuildLayout();
 
@@ -103,6 +111,10 @@ public sealed class MainWindow : Form
         _titleLabel.TextAlign = ContentAlignment.MiddleLeft;
         _titleLabel.Padding = new Padding(12, 0, 0, 0);
         _titleLabel.ForeColor = Theme.Text;
+        _searchBar.BackColor = Theme.Surface;
+        _searchField.BackColor = Theme.Canvas;
+        _searchField.ForeColor = Theme.Text;
+        _searchResults.ForeColor = Theme.TextMuted;
         _titleLabel.BackColor = Color.Transparent;
         _titleLabel.AutoEllipsis = true;
         _titleLabel.MouseDown += TitleBarMouseDown;
@@ -169,6 +181,7 @@ public sealed class MainWindow : Form
         ConfigureButton(_rotateRightButton, IconKind.RotateRight, null, () => Rotate(90));
         ConfigureButton(_copyButton, IconKind.Copy, Strings.Get("Copy"), CopySelection);
         _copyButton.Enabled = false;
+        ConfigureButton(_searchButton, IconKind.Search, null, OpenSearch);
 
         flow.Controls.Add(_openButton);
         flow.Controls.Add(Separator());
@@ -178,8 +191,9 @@ public sealed class MainWindow : Form
         flow.Controls.Add(Separator());
         flow.Controls.Add(_rotateLeftButton);
         flow.Controls.Add(_rotateRightButton);
-        flow.Controls.Add(Separator());
         flow.Controls.Add(_copyButton);
+        flow.Controls.Add(Separator());
+        flow.Controls.Add(_searchButton);
 
         _toolbar.Controls.Add(flow);
         Controls.Add(_toolbar);
@@ -206,6 +220,63 @@ public sealed class MainWindow : Form
         button.Click += (_, _) => onClick();
     }
 
+    private void BuildSearchBar()
+    {
+        _searchBar.Dock = DockStyle.Top;
+        _searchBar.Height = 40;
+        _searchBar.BackColor = Theme.Surface;
+        _searchBar.Visible = false;
+        _searchBar.Paint += (_, e) =>
+        {
+            using var pen = new Pen(Theme.Border);
+            e.Graphics.DrawLine(pen, 0, _searchBar.Height - 1, _searchBar.Width, _searchBar.Height - 1);
+        };
+
+        // A real TextBox: it gives caret, selection and the suite's own context
+        // menu for editable fields without reimplementing any of it.
+        _searchField.BorderStyle = BorderStyle.FixedSingle;
+        _searchField.BackColor = Theme.Canvas;
+        _searchField.ForeColor = Theme.Text;
+        _searchField.Width = 260;
+        _searchField.PlaceholderText = Strings.Get("SearchPlaceholder");
+        _searchField.TextChanged += (_, _) => RunSearch();
+        _searchField.KeyDown += OnSearchFieldKeyDown;
+        _searchField.MouseUp += (_, e) =>
+        {
+            if (e.Button == MouseButtons.Right)
+            {
+                TextFieldContextMenu.Show(_searchField, Cursor.Position);
+            }
+        };
+
+        _searchResults.AutoSize = false;
+        _searchResults.Width = 110;
+        _searchResults.TextAlign = ContentAlignment.MiddleLeft;
+        _searchResults.ForeColor = Theme.TextMuted;
+        _searchResults.BackColor = Color.Transparent;
+
+        ConfigureButton(_searchPreviousButton, IconKind.PreviousPage, null, () => _viewer.GoToPreviousMatch());
+        ConfigureButton(_searchNextButton, IconKind.NextPage, null, () => _viewer.GoToNextMatch());
+        ConfigureButton(_searchCloseButton, IconKind.Close, null, CloseSearch);
+        _searchCloseButton.AccessibleName = Strings.Get("SearchClear");
+
+        var layout = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Padding = new Padding(10, 4, 10, 4),
+            BackColor = Color.Transparent,
+        };
+        layout.Controls.Add(_searchField);
+        layout.Controls.Add(_searchResults);
+        layout.Controls.Add(_searchPreviousButton);
+        layout.Controls.Add(_searchNextButton);
+        layout.Controls.Add(_searchCloseButton);
+
+        _searchBar.Controls.Add(layout);
+    }
+
     private void BuildStatusBar()
     {
         _statusBar.Dock = DockStyle.Bottom;
@@ -219,9 +290,9 @@ public sealed class MainWindow : Form
 
         _pageLabel.AutoSize = false;
         _pageLabel.Dock = DockStyle.Left;
-        _pageLabel.Width = 220;
+        _pageLabel.Width = 260;
         _pageLabel.TextAlign = ContentAlignment.MiddleLeft;
-        _pageLabel.Padding = new Padding(12, 0, 0, 0);
+        _pageLabel.Padding = new Padding(14, 0, 0, 0);
         _pageLabel.ForeColor = Theme.TextMuted;
         _pageLabel.BackColor = Color.Transparent;
 
@@ -397,6 +468,61 @@ public sealed class MainWindow : Form
             var readBack = Clipboard.ContainsText() ? Clipboard.GetText() : string.Empty;
             Console.Error.WriteLine($"SELFTEST: clipboardChars={readBack.Length} matches={readBack == text}");
         }
+
+        await RunSearchSelfTestAsync();
+    }
+
+    /// <summary>
+    /// Searches a known word and reports the match count and navigation, so the
+    /// search pipeline can be verified without driving the UI.
+    /// </summary>
+    private async Task RunSearchSelfTestAsync()
+    {
+        // The term comes from --selftest-term when provided, so the same hook can
+        // verify any document instead of only the one with "Website" in it.
+        var termArg = Environment.GetCommandLineArgs()
+            .FirstOrDefault(a => a.StartsWith("--selftest-term=", StringComparison.OrdinalIgnoreCase));
+        var term = termArg is null ? "Website" : termArg.Substring("--selftest-term=".Length);
+
+        OpenSearch();
+        _searchField.Text = term;
+        RunSearch();
+
+        // Pages are extracted one by one on the PDFium thread. Wait until the
+        // count stops changing, not until it is non-zero, or the report only
+        // covers the first page that happened to finish.
+        var lastCount = -1;
+        for (var i = 0; i < 100; i++)
+        {
+            await Task.Delay(100);
+            if (_viewer.MatchCount == lastCount)
+            {
+                break;
+            }
+            lastCount = _viewer.MatchCount;
+        }
+
+        Console.Error.WriteLine($"SELFTEST: term='{term}' matches={_viewer.MatchCount} active={_viewer.ActiveMatchNumber}");
+        Console.Error.WriteLine($"SELFTEST: results='{_searchResults.Text}'");
+
+        if (_viewer.MatchCount > 1)
+        {
+            _viewer.GoToNextMatch();
+            await Task.Delay(200);
+            Console.Error.WriteLine($"SELFTEST: after next active={_viewer.ActiveMatchNumber} scroll={_viewer.ScrollY}");
+        }
+
+        Console.Error.WriteLine($"SELFTEST: searchBarVisible={_searchBar.Visible}");
+
+        // Walk every match and report the scroll offset, which proves
+        // cross-page navigation actually moves the view.
+        var before = _viewer.ScrollY;
+        for (var i = 0; i < Math.Min(4, _viewer.MatchCount); i++)
+        {
+            _viewer.GoToNextMatch();
+            Console.Error.WriteLine($"SELFTEST: nav active={_viewer.ActiveMatchNumber}/{_viewer.MatchCount} scroll={_viewer.ScrollY}");
+        }
+        Console.Error.WriteLine($"SELFTEST: scroll moved from {before} to {_viewer.ScrollY}");
     }
 
     /// <summary>
@@ -474,6 +600,7 @@ public sealed class MainWindow : Form
         };
 
         _viewer.SelectionChanged += (_, _) => UpdateSelectionState();
+        _viewer.SearchChanged += (_, _) => UpdateSearchState();
         _viewer.MouseUp += ViewerMouseUpForContextMenu;
 
         _viewer.MouseWheel += (_, _) => SyncScrollBar();
@@ -675,10 +802,89 @@ public sealed class MainWindow : Form
         UpdateStatus();
     }
 
+    /// <summary>Shows the search bar and focuses the field.</summary>
+    private void OpenSearch()
+    {
+        if (_document is null)
+        {
+            return;
+        }
+
+        _searchBar.Visible = true;
+        _searchField.Focus();
+        _searchField.SelectAll();
+        RescaleChrome();
+    }
+
+    private void CloseSearch()
+    {
+        _searchBar.Visible = false;
+        _viewer.ClearSearch();
+        _searchResults.Text = string.Empty;
+        _viewer.Focus();
+        RescaleChrome();
+    }
+
+    /// <summary>
+    /// Runs the current query. The viewer reports progress as pages are
+    /// extracted, so the counter updates while typing instead of freezing.
+    /// </summary>
+    private void RunSearch()
+    {
+        _viewer.Search(_searchField.Text);
+    }
+
+    private void OnSearchFieldKeyDown(object? sender, KeyEventArgs e)
+    {
+        switch (e.KeyCode)
+        {
+            case Keys.Enter:
+                if (e.Shift)
+                {
+                    _viewer.GoToPreviousMatch();
+                }
+                else
+                {
+                    _viewer.GoToNextMatch();
+                }
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+                break;
+            case Keys.Escape:
+                CloseSearch();
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+                break;
+        }
+    }
+
     /// <summary>
     /// Enables the copy command and refreshes the status hint that tells the user
     /// what the current selection is worth.
     /// </summary>
+    /// <summary>
+    /// Reflects the current search in the bar: match count, position, and whether
+    /// the navigation buttons can do anything.
+    /// </summary>
+    private void UpdateSearchState()
+    {
+        var term = _viewer.SearchTerm;
+        if (string.IsNullOrEmpty(term))
+        {
+            _searchResults.Text = string.Empty;
+            _searchPreviousButton.Enabled = false;
+            _searchNextButton.Enabled = false;
+            return;
+        }
+
+        var total = _viewer.MatchCount;
+        _searchResults.Text = total == 0
+            ? Strings.Get("SearchNoResults")
+            : Strings.Format("SearchResults", _viewer.ActiveMatchNumber, total);
+        _searchPreviousButton.Enabled = total > 0;
+        _searchNextButton.Enabled = total > 0;
+    }
+
     private void UpdateSelectionState()
     {
         _copyButton.Enabled = _viewer.HasSelection;
@@ -793,6 +999,10 @@ public sealed class MainWindow : Form
         _pageLabel.ForeColor = Theme.TextMuted;
         _zoomLabel.ForeColor = Theme.TextMuted;
         _titleLabel.ForeColor = Theme.Text;
+        _searchBar.BackColor = Theme.Surface;
+        _searchField.BackColor = Theme.Canvas;
+        _searchField.ForeColor = Theme.Text;
+        _searchResults.ForeColor = Theme.TextMuted;
         _themeButton.Icon = Theme.CurrentTheme switch
         {
             AppTheme.Gray => IconKind.ThemeGray,
@@ -856,6 +1066,11 @@ public sealed class MainWindow : Form
         _rotateLeftButton.Enabled = hasDocument;
         _rotateRightButton.Enabled = hasDocument;
         _copyButton.Enabled = hasDocument && _viewer.HasSelection;
+        _searchButton.Enabled = hasDocument;
+        if (!hasDocument && _searchBar.Visible)
+        {
+            CloseSearch();
+        }
     }
 
     // --- Persistence --------------------------------------------------------
@@ -1002,6 +1217,14 @@ public sealed class MainWindow : Form
                 _viewer.SelectAllOnCurrentPage();
                 e.Handled = true;
                 break;
+            case Keys.F when e.Control:
+                OpenSearch();
+                e.Handled = true;
+                break;
+            case Keys.F3:
+                _viewer.GoToNextMatch();
+                e.Handled = true;
+                break;
             case Keys.W when e.Control:
                 Close();
                 e.Handled = true;
@@ -1073,6 +1296,10 @@ public sealed class MainWindow : Form
         _titleBar.Height = (int)Math.Round(TitleBarHeight * scale);
         _toolbar.Height = (int)Math.Round(ToolbarHeight * scale);
         _statusBar.Height = (int)Math.Round(StatusBarHeight * scale);
+        _searchBar.Height = (int)Math.Round(40 * scale);
+        _searchField.Width = (int)Math.Round(260 * scale);
+        _searchResults.Width = (int)Math.Round(110 * scale);
+        _pageLabel.Width = (int)Math.Round(260 * scale);
 
         foreach (Control control in _toolbar.Controls)
         {
@@ -1113,6 +1340,17 @@ public sealed class MainWindow : Form
     }
 
     private SingleInstance? _singleInstance;
+
+    /// <summary>Runs a search without opening the bar, for screenshot verification.</summary>
+    internal void SelfTestSearch(string term)
+    {
+        OpenSearch();
+        _searchField.Text = term;
+        RunSearch();
+    }
+
+    /// <summary>Matches found by the last self-test search.</summary>
+    internal int SelfTestMatchCount => _viewer.MatchCount;
 
     /// <summary>Attaches the single-instance helper so WndProc can route to it.</summary>
     public void AttachSingleInstance(SingleInstance singleInstance)

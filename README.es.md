@@ -10,10 +10,10 @@ ventana.
 
 ## Estado
 
-Fase 0: un esqueleto funcional. Abre un PDF, lo muestra de forma continua, permite
-desplazarse, hacer zoom y girar, con tres temas e interfaz en dos idiomas.
-Pestañas, búsqueda, selección, miniaturas, marcadores e impresión todavía no están
-implementados.
+Fase 0: un lector funcional. Abre un PDF, lo muestra de forma continua, permite
+desplazarse, hacer zoom y girar, selecciona y copia texto, y busca con resaltado,
+con tres temas e interfaz en dos idiomas. Pestañas, miniaturas, marcadores e
+impresión todavía no están implementados.
 
 ## Qué funciona hoy
 
@@ -23,6 +23,9 @@ implementados.
   arrastre con el botón central
 - Selecciona y copia texto: arrastra, doble clic para una palabra, triple clic
   para una línea
+- Busca en todo el documento con cada coincidencia resaltada y la activa en un
+  color más fuerte; `Ctrl+F` abre la barra, `Enter` y `Shift+Enter` recorren las
+  coincidencias
 - Una sola ventana por sesión: abrir un segundo PDF lo entrega a la ventana activa
 - Zoom de 10% a 800%, ajustar al ancho, volver al 100%
 - Rotación en pasos de 90 grados
@@ -109,6 +112,10 @@ CyberPDF.exe --shot salida.png documento.pdf
 | `Ctrl++` / `Ctrl+-` | Acercar / alejar |
 | `Ctrl+0` | Tamaño real |
 | `Ctrl+R` | Girar en sentido horario |
+| `Ctrl+F` | Buscar en el documento |
+| `F3` | Siguiente coincidencia |
+| `Ctrl+C` | Copiar la selección |
+| `Ctrl+A` | Seleccionar la página actual |
 | `Ctrl+W` | Cerrar |
 | `F11` | Maximizar / restaurar |
 | `Av Pág` / `Re Pág` | Desplazar una pantalla |

@@ -69,16 +69,9 @@ internal static class Program
             var stress = args.Any(a => a.Equals("--stress", StringComparison.OrdinalIgnoreCase));
             window.RequestDiagnostics(stress);
         }
-        if (shotPath is not null)
-        {
-            var withSelection = args.Any(a => a.Equals("--select", StringComparison.OrdinalIgnoreCase));
-            window.Shown += async (_, _) =>
-            {
-                await ScreenshotProbe.CaptureAsync(window, shotPath, withSelection);
-                window.Close();
-            };
-        }
-
+        // Registered first so the document is already opening when the capture
+        // handler runs: WinForms invokes Shown handlers in registration order, and
+        // a screenshot taken before the document exists shows an empty window.
         window.Shown += (_, _) =>
         {
             if (initial is not null)
@@ -97,6 +90,24 @@ internal static class Program
                     window.Activate();
                 });
         };
+
+        if (shotPath is not null)
+        {
+            var withSelection = args.Any(a => a.Equals("--select", StringComparison.OrdinalIgnoreCase));
+            var searchArg = args.FirstOrDefault(a => a.StartsWith("--search=", StringComparison.OrdinalIgnoreCase));
+            var searchTerm = searchArg?.Substring("--search=".Length);
+            window.Shown += async (_, _) =>
+            {
+                // Opening is asynchronous (the document is loaded on the PDFium
+                // thread), so wait for it rather than assuming it finished.
+                for (var i = 0; i < 60 && !window.HasDocument; i++)
+                {
+                    await Task.Delay(100);
+                }
+                await ScreenshotProbe.CaptureAsync(window, shotPath, withSelection, searchTerm);
+                window.Close();
+            };
+        }
 
         try
         {

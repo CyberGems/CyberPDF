@@ -1,6 +1,7 @@
 using CyberPDF.Common.I18n;
 using CyberPDF.Core.Documents;
 using CyberPDF.Core.Rendering;
+using CyberPDF.Core.Search;
 using CyberPDF.Core.Text;
 using CyberPDF.UI.Theming;
 
@@ -54,6 +55,14 @@ public sealed class PageViewer : Control
     /// </summary>
     private readonly Dictionary<int, PageTextLayer> _textLayers = new();
     private readonly HashSet<int> _textInFlight = new();
+
+    /// <summary>
+    /// Pages already searched for the current query. Text extraction can serve
+    /// the same request twice (a queued continuation plus the retry that runs
+    /// when a layer lands), so this keeps the work and the result list at one
+    /// pass per page.
+    /// </summary>
+    private readonly HashSet<int> _searchedPages = new();
     private readonly Dictionary<int, List<PdfRect>> _highlightCache = new();
 
     private PdfDocument? _document;
@@ -65,6 +74,16 @@ public sealed class PageViewer : Control
     private bool _panning;
     private int _panStartScroll;
     private int _lastDpi = -1;
+
+    /// <summary>
+    /// Prepared search text per page, so a live search while typing does not
+    /// rebuild the string-and-index map on every keystroke.
+    /// </summary>
+    private readonly Dictionary<int, SearchableText> _searchTexts = new();
+    private readonly List<SearchMatch> _matches = new();
+    private int _activeMatch = -1;
+    private string _searchTerm = string.Empty;
+    private SearchOptions _searchOptions = new();
 
     private TextSelection? _selection;
     private bool _selecting;
@@ -106,6 +125,9 @@ public sealed class PageViewer : Control
 
     public int ViewportHeight => ClientSize.Height;
 
+    /// <summary>Cached text layers, for diagnostics.</summary>
+    internal int DebugTextLayerCount => _textLayers.Count;
+
     /// <summary>Number of rendered bands currently referenced by this control.</summary>
     public int TileCount => _tiles.Count;
 
@@ -134,6 +156,11 @@ public sealed class PageViewer : Control
         _textLayers.Clear();
         _textInFlight.Clear();
         _highlightCache.Clear();
+        _searchTexts.Clear();
+        _searchedPages.Clear();
+        _searchTerm = string.Empty;
+        _matches.Clear();
+        _activeMatch = -1;
         _selection = null;
         _selecting = false;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
@@ -234,6 +261,165 @@ public sealed class PageViewer : Control
         SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>Current search term, empty when no search is active.</summary>
+    public string SearchTerm => _searchTerm;
+
+    /// <summary>Number of matches found, zero when nothing is active.</summary>
+    public int MatchCount => _matches.Count;
+
+    /// <summary>One-based index of the active match, or zero when there is none.</summary>
+    public int ActiveMatchNumber => _activeMatch < 0 ? 0 : _activeMatch + 1;
+
+    /// <summary>Raised when search results change, so the window can update its bar.</summary>
+    public event EventHandler? SearchChanged;
+
+    /// <summary>
+    /// Runs a search over the whole document and highlights every match.
+    /// </summary>
+    /// <remarks>
+    /// Text extraction is asynchronous, so this walks the pages one at a time
+    /// and reports progress through <see cref="SearchChanged"/>. Pages already
+    /// cached are searched immediately; the rest arrive as their text layer
+    /// finishes, which is what makes the count climb instead of freezing.
+    /// </remarks>
+    public void Search(string term, SearchOptions? options = null)
+    {
+        _searchTerm = term ?? string.Empty;
+        _searchOptions = options ?? new SearchOptions();
+        _matches.Clear();
+        _activeMatch = -1;
+        _searchTexts.Clear();
+        _searchedPages.Clear();
+        InvalidateOverlays();
+        Invalidate();
+
+        if (_document is null || string.IsNullOrWhiteSpace(_searchTerm))
+        {
+            SearchChanged?.Invoke(this, EventArgs.Empty);
+            return;
+        }
+
+        for (var page = 0; page < _document.PageCount; page++)
+        {
+            var pageIndex = page;
+            EnsureTextLayer(pageIndex, () => SearchPage(pageIndex));
+        }
+
+        SearchChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Drops overlay geometry. Rectangles are derived from the selection and the
+    /// active search, so any change to either has to discard them or the previous
+    /// result stays on screen.
+    /// </summary>
+    private void InvalidateOverlays() => _highlightCache.Clear();
+
+    private void SearchPage(int pageIndex)
+    {
+        if (_document is null || _searchTerm.Length == 0)
+        {
+            return;
+        }
+        if (!_textLayers.TryGetValue(pageIndex, out var layer))
+        {
+            return;
+        }
+        if (!_searchedPages.Add(pageIndex))
+        {
+            return;
+        }
+
+        if (!_searchTexts.TryGetValue(pageIndex, out var searchable))
+        {
+            searchable = SearchableText.FromLayer(layer);
+            _searchTexts[pageIndex] = searchable;
+        }
+
+        var found = SearchEngine.FindInSearchableText(searchable, pageIndex, _searchTerm, _searchOptions);
+
+        // Results stay ordered by page, so a late page appends in place.
+        _matches.RemoveAll(m => m.PageIndex == pageIndex);
+        _matches.AddRange(found);
+        _matches.Sort((a, b) => a.PageIndex != b.PageIndex
+            ? a.PageIndex.CompareTo(b.PageIndex)
+            : a.Start.CompareTo(b.Start));
+
+        if (_activeMatch < 0 && _matches.Count > 0)
+        {
+            _activeMatch = 0;
+        }
+
+        InvalidateOverlays();
+        Invalidate();
+        SearchChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Moves to the next match, wrapping at the end.</summary>
+    public void GoToNextMatch()
+    {
+        if (_matches.Count == 0)
+        {
+            return;
+        }
+        _activeMatch = (_activeMatch + 1) % _matches.Count;
+        InvalidateOverlays();
+        RevealActiveMatch();
+    }
+
+    /// <summary>Moves to the previous match, wrapping at the start.</summary>
+    public void GoToPreviousMatch()
+    {
+        if (_matches.Count == 0)
+        {
+            return;
+        }
+        _activeMatch = (_activeMatch - 1 + _matches.Count) % _matches.Count;
+        InvalidateOverlays();
+        RevealActiveMatch();
+    }
+
+    /// <summary>Clears the search and its highlights.</summary>
+    public void ClearSearch()
+    {
+        if (_searchTerm.Length == 0 && _matches.Count == 0)
+        {
+            return;
+        }
+        _searchTerm = string.Empty;
+        _matches.Clear();
+        _activeMatch = -1;
+        _searchTexts.Clear();
+        _searchedPages.Clear();
+        InvalidateOverlays();
+        Invalidate();
+        SearchChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Scrolls the active match into view, keeping a third of a screen of context
+    /// above it so the user can read around the hit.
+    /// </summary>
+    private void RevealActiveMatch()
+    {
+        if (_activeMatch < 0 || _activeMatch >= _matches.Count || _layout is null)
+        {
+            return;
+        }
+
+        var match = _matches[_activeMatch];
+        if (match.PageIndex >= _layout.Slots.Count)
+        {
+            return;
+        }
+
+        var slot = _layout.Slots[match.PageIndex];
+        var context = Math.Max(40, ClientSize.Height / 3);
+        ScrollTo(slot.Top - context);
+        Invalidate();
+        SearchChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     /// <summary>Selects everything on the page under the viewport top.</summary>
     public void SelectAllOnCurrentPage()
     {
@@ -313,6 +499,14 @@ public sealed class PageViewer : Control
                         _textInFlight.Remove(pageIndex);
                         _textLayers[pageIndex] = layer;
                         continuation();
+
+                        // A newer query may have arrived while this page was
+                        // extracting; its request was dropped as a duplicate,
+                        // so run it now or that page stays out of the results.
+                        if (_searchTerm.Length > 0)
+                        {
+                            SearchPage(pageIndex);
+                        }
                     });
                 }
                 catch (InvalidOperationException)
@@ -674,6 +868,70 @@ public sealed class PageViewer : Control
                 // size, so GDI+ does not resample and keeps no scaled copy.
                 var destination = new Rectangle(left, top + bandTop, slot.Width, bandHeight);
                 graphics.DrawImage(bitmap, destination, 0, 0, bitmap.Width, bitmap.Height, GraphicsUnit.Pixel);
+            }
+
+            // Overlays belong to the real paint path, not only to screenshots.
+            // Search hits go first so an explicit selection stays readable on top.
+            DrawSearchHighlights(graphics, slot, left, top);
+            DrawSelection(graphics, slot, left, top);
+        }
+    }
+
+    /// <summary>
+    /// Paints every match on a page, with the active one in a stronger tone. Hits
+    /// come from the Core already merged per line, so a page with many matches
+    /// still costs a handful of fills.
+    /// </summary>
+    private void DrawSearchHighlights(Graphics graphics, PageSlot slot, int pageLeft, int pageTop)
+    {
+        if (_matches.Count == 0 || _document is null)
+        {
+            return;
+        }
+        if (!_textLayers.TryGetValue(slot.PageIndex, out var layer))
+        {
+            return;
+        }
+
+        var indices = new List<int>();
+        for (var i = 0; i < _matches.Count; i++)
+        {
+            if (_matches[i].PageIndex == slot.PageIndex)
+            {
+                indices.Add(i);
+            }
+        }
+        if (indices.Count == 0)
+        {
+            return;
+        }
+
+        var size = _document.GetPageSize(slot.PageIndex);
+        var transform = new PageTransform(size, slot.Width, slot.Height, _rotation);
+
+        using var normal = new SolidBrush(Theme.SearchMatch);
+        using var active = new SolidBrush(Theme.SearchMatchActive);
+
+        foreach (var index in indices)
+        {
+            var match = _matches[index];
+            var brush = index == _activeMatch ? active : normal;
+            var rects = TextSelectionEngine.BuildHighlightRects(
+                layer,
+                new TextSelection(slot.PageIndex, match.Start, match.Length));
+
+            foreach (var rect in rects)
+            {
+                // Same corner mapping as the selection: a rotation swaps which
+                // corner ends up top-left, so min and max are what keep the fill
+                // on the glyphs.
+                var cornerA = transform.PdfToView(rect.Left, rect.Top);
+                var cornerB = transform.PdfToView(rect.Right, rect.Bottom);
+                var x = pageLeft + (int)Math.Floor(Math.Min(cornerA.X, cornerB.X));
+                var y = pageTop + (int)Math.Floor(Math.Min(cornerA.Y, cornerB.Y));
+                var width = Math.Max(1, (int)Math.Ceiling(Math.Abs(cornerB.X - cornerA.X)));
+                var height = Math.Max(1, (int)Math.Ceiling(Math.Abs(cornerB.Y - cornerA.Y)));
+                graphics.FillRectangle(brush, x, y, width, height);
             }
         }
     }

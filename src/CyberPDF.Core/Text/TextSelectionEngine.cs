@@ -62,17 +62,31 @@ public static class TextSelectionEngine
                 continue;
             }
 
-            // Same visual line when the vertical spans mostly overlap.
+            // Same visual line when the vertical spans actually overlap. Comparing
+            // tops and bottoms with a percentage tolerance merged glyphs from
+            // adjacent lines whenever their boxes were tall (a heading next to
+            // body text), which painted one rectangle stretched over both.
             var sameLine = currentLeft is not null
-                && Math.Abs(character.Top - currentTop) < character.Height * 0.5
-                && Math.Abs(character.Bottom - currentBottom) < character.Height * 0.5;
+                && character.Bottom < currentTop
+                && character.Top > currentBottom
+                && Math.Min(character.Top, currentTop) - Math.Max(character.Bottom, currentBottom)
+                    > Math.Min(character.Height, currentTop - currentBottom) * 0.5;
 
             if (currentLeft is null || sameLine)
             {
-                currentLeft ??= character.Left;
-                currentRight = Math.Max(currentRight, character.Right);
-                currentBottom = currentBottom == 0 ? character.Bottom : Math.Min(currentBottom, character.Bottom);
-                currentTop = currentTop == 0 ? character.Top : Math.Max(currentTop, character.Top);
+                if (currentLeft is null)
+                {
+                    currentLeft = character.Left;
+                    currentRight = character.Right;
+                    currentBottom = character.Bottom;
+                    currentTop = character.Top;
+                }
+                else
+                {
+                    currentRight = Math.Max(currentRight, character.Right);
+                    currentBottom = Math.Min(currentBottom, character.Bottom);
+                    currentTop = Math.Max(currentTop, character.Top);
+                }
                 continue;
             }
 

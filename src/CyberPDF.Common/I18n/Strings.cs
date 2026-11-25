@@ -59,6 +59,17 @@ public static class Strings
         ["About"] = ("About CyberPDF", "Acerca de CyberPDF"),
         ["Engine"] = ("PDF engine", "Motor PDF"),
 
+        // Search
+        ["Search"] = ("Search", "Buscar"),
+        ["SearchPlaceholder"] = ("Search in document...", "Buscar en el documento..."),
+        ["SearchNext"] = ("Next match", "Siguiente coincidencia"),
+        ["SearchPrevious"] = ("Previous match", "Coincidencia anterior"),
+        ["SearchNoResults"] = ("No results", "Sin resultados"),
+        ["SearchResults"] = ("{0} of {1}", "{0} de {1}"),
+        ["SearchNoDocument"] = ("Open a document to search", "Abre un documento para buscar"),
+        ["SearchClear"] = ("Clear search", "Borrar búsqueda"),
+        ["MatchCase"] = ("Match case", "Distinguir mayúsculas"),
+
         // Text selection
         ["Copy"] = ("Copy", "Copiar"),
         ["Cut"] = ("Cut", "Cortar"),

@@ -19,6 +19,9 @@ All notable changes to CyberPDF are documented here. The format follows
 - Password protected documents are detected and reported with a clear message
 - Text selection with copy: drag to select, double click for a word, triple click
   for a line, Ctrl+C to copy, and a themed context menu on the page
+- Search across the document with Ctrl+F: every match is highlighted, the active
+  one in a stronger color, F3 and Shift+Enter walk the hits and the view scrolls
+  to each one
 - One window per session: opening another PDF in Explorer hands it to the running
   window instead of starting a second copy
 - Inno Setup installer with optional `.pdf` association, both languages and no
@@ -44,6 +47,9 @@ All notable changes to CyberPDF are documented here. The format follows
 - Selección de texto con copia: arrastra para seleccionar, doble clic para una
   palabra, triple clic para una línea, Ctrl+C para copiar, y un menú contextual
   temático sobre la página
+- Búsqueda en todo el documento con Ctrl+F: cada coincidencia se resalta y la
+  activa en un color más fuerte, F3 y Shift+Enter recorren los resultados y la
+  vista se desplaza hasta cada uno
 - Una sola ventana por sesión: abrir otro PDF desde el Explorador lo entrega a la
   ventana activa en lugar de iniciar una segunda copia
 - Instalador Inno Setup con asociación `.pdf` opcional, ambos idiomas y sin
