@@ -1,0 +1,11 @@
+name: README sync
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  readme-sync:
+    uses: CyberGems/.github/.github/workflows/readme-sync.yml@main

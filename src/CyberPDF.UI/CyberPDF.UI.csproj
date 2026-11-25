@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>CyberPDF</AssemblyName>
+    <RootNamespace>CyberPDF.UI</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationIcon>Assets/CyberPDF.ico</ApplicationIcon>
+    <SatelliteResourceLanguages>en;es</SatelliteResourceLanguages>
+    <!-- Every control is built in code: there is no designer surface, so the
+         WinForms designer-serialization analyzer has nothing to protect. -->
+    <EnableWindowsFormsDesignerSerialization>false</EnableWindowsFormsDesignerSerialization>
+    <NoWarn>$(NoWarn);WFO1000</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CyberPDF.Common\CyberPDF.Common.csproj" />
+    <ProjectReference Include="..\CyberPDF.Core\CyberPDF.Core.csproj" />
+  </ItemGroup>
+
+  <!-- The native engine is copied beside the executable for development runs so
+       the app can start straight from bin/. Published builds pick it up from
+       the same relative location. -->
+  <ItemGroup Condition="Exists('../../native/pdfium/bin/pdfium.dll')">
+    <None Include="../../native/pdfium/bin/pdfium.dll">
+      <Link>pdfium.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

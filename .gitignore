@@ -1,0 +1,33 @@
+# Build output
+bin/
+obj/
+publish-win64/
+publish-win32/
+publish-win-arm64/
+publish-test*/
+
+# Installer output
+CyberPDF-Setup-*.exe
+*.iss.tmp
+
+# Fetched native binaries. Restored on demand by scripts/Fetch-Pdfium.ps1 and
+# verified against a pinned SHA-256, so they are never committed.
+native/pdfium/bin/
+native/pdfium/include/
+native/pdfium/licenses/
+native/pdfium/*.tgz
+native/pdfium/LICENSE-pdfium-binaries.txt
+
+# Test artifacts
+TestResults/
+*.trx
+coverage/
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
+
+# Local scratch: screenshots, notes, reference material. Never committed.
+artifacts/

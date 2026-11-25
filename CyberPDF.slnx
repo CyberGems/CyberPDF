@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/CyberPDF.Common/CyberPDF.Common.csproj" />
+    <Project Path="src/CyberPDF.Core/CyberPDF.Core.csproj" />
+    <Project Path="src/CyberPDF.UI/CyberPDF.UI.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/CyberPDF.Tests/CyberPDF.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,109 @@
+name: Build and Release CyberPDF
+
+on:
+  pull_request:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version tag (e.g. v0.1.0)'
+        required: false
+        default: 'v0.1.0'
+
+permissions:
+  contents: write
+
+jobs:
+  tests:
+    name: Test
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore PDFium
+        shell: pwsh
+        run: ./scripts/Fetch-Pdfium.ps1
+
+      - name: Run Tests
+        run: dotnet test CyberPDF.slnx --configuration Release
+
+  release:
+    name: Build and Release
+    needs: tests
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Determine Version
+        id: ver
+        shell: pwsh
+        run: |
+          $v = "${{ github.event.inputs.version }}"
+          if ([string]::IsNullOrWhiteSpace($v)) {
+            $v = "${{ github.ref_name }}"
+          }
+          if ($v -eq "main" -or [string]::IsNullOrWhiteSpace($v)) {
+            $v = "v0.1.0"
+          }
+          Write-Host "Determined Version: $v"
+          echo "VERSION=$v" >> $env:GITHUB_ENV
+
+      - name: Restore PDFium
+        shell: pwsh
+        run: ./scripts/Fetch-Pdfium.ps1
+
+      - name: Publish
+        shell: pwsh
+        run: ./scripts/Publish-CyberPDF.ps1
+
+      - name: Zip Published Output (Portable)
+        shell: pwsh
+        run: |
+          Compress-Archive -Path ./publish-win64/* -DestinationPath ./CyberPDF-${{ env.VERSION }}-Portable-win-x64.zip
+
+      - name: Compile Inno Setup Installer
+        shell: pwsh
+        run: |
+          # The installer version has no 'v' prefix; the tag keeps it.
+          $bare = "${{ env.VERSION }}".TrimStart("v")
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=$bare" CyberPDF.iss
+
+      - name: Prepare Release Notes
+        shell: pwsh
+        run: |
+          $bare = "${{ env.VERSION }}".TrimStart("v")
+          $installer = "./CyberPDF-Setup-$bare.exe"
+          $portable = "./CyberPDF-${{ env.VERSION }}-Portable-win-x64.zip"
+          $installerHash = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLower()
+          $portableHash = (Get-FileHash $portable -Algorithm SHA256).Hash.ToLower()
+          $template = [System.IO.File]::ReadAllText(".github/release-template.md", [System.Text.Encoding]::UTF8)
+          $notes = $template.Replace("{{VERSION}}", "${{ env.VERSION }}").Replace("{{INSTALLER_HASH}}", $installerHash).Replace("{{PORTABLE_HASH}}", $portableHash)
+          [System.IO.File]::WriteAllText("release_notes.md", $notes, [System.Text.Encoding]::UTF8)
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          body_path: release_notes.md
+          files: |
+            CyberPDF-Setup-*.exe
+            CyberPDF-*-Portable-win-x64.zip
