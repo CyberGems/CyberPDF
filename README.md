@@ -112,8 +112,12 @@ CyberPDF.exe --shot out.png document.pdf
 | `Ctrl++` / `Ctrl+-` | Zoom in / out |
 | `Ctrl+0` | Actual size |
 | `Ctrl+R` | Rotate clockwise |
+| `Alt+R` | Rotate counterclockwise |
+| `Alt+W` | Fit width |
+| `Alt+T` | Change theme |
 | `Ctrl+F` | Search in the document |
 | `F3` | Next match |
+| `Shift+F3` | Previous match |
 | `Ctrl+C` | Copy the selection |
 | `Ctrl+A` | Select the current page |
 | `Ctrl+W` | Close |

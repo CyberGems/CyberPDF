@@ -86,10 +86,6 @@ public sealed class PageViewer : Control
     private SearchOptions _searchOptions = new();
 
     private TextSelection? _selection;
-    private bool _selecting;
-    private int _selectionAnchor = -1;
-    private int _selectionPage = -1;
-    private (double X, double Y) _selectionStartPdf;
 
     public PageViewer(PdfEngine engine)
     {
@@ -162,7 +158,6 @@ public sealed class PageViewer : Control
         _matches.Clear();
         _activeMatch = -1;
         _selection = null;
-        _selecting = false;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         _layout = document is null ? null : DocumentLayout.ForDocument(document, LayoutZoom, GapForZoom(), 0);
         _scrollY = 0;
@@ -987,9 +982,39 @@ public sealed class PageViewer : Control
     protected override void OnMouseWheel(MouseEventArgs e)
     {
         base.OnMouseWheel(e);
+        ScrollByWheel(e.Delta);
+
+        // Marked handled: without it WinForms bubbles the same wheel event to the
+        // parent form, which would scroll a second time.
+        if (e is HandledMouseEventArgs handled)
+        {
+            handled.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// Scrolls by one wheel notch, in the direction of <paramref name="delta"/>.
+    /// Exposed because the window forwards wheel events it receives when the
+    /// focus is on a button instead of the page.
+    /// </summary>
+    public void ScrollByWheel(int delta)
+    {
+        if (delta == 0)
+        {
+            return;
+        }
+
+        // A high-resolution wheel sends deltas smaller than 120. Scaling by the
+        // fraction keeps touchpad scrolling proportional instead of ignoring it.
+        var notches = delta / 120f;
         var lines = SystemInformation.MouseWheelScrollLines;
         var step = lines > 0 ? (int)(Font.Height * 3.2f * lines) : ClientSize.Height / 3;
-        ScrollBy(-Math.Sign(e.Delta) * step);
+        var amount = (int)Math.Round(-notches * step);
+        if (amount == 0)
+        {
+            amount = -Math.Sign(delta);
+        }
+        ScrollBy(amount);
     }
 
     protected override void OnMouseDown(MouseEventArgs e)

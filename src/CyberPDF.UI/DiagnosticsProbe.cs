@@ -66,6 +66,9 @@ internal static class DiagnosticsProbe
         sb.AppendLine($"  page raster      : {info.RequestedWidth}x{info.RequestedHeight} px");
         sb.AppendLine($"  render bands     : {info.TileCount} band(s) of max {info.TileHeight} px");
         sb.AppendLine($"  scrollbar bounds : {info.ScrollBounds}");
+        sb.AppendLine($"  chrome           : title {info.TitleBarBounds} toolbar {info.ToolbarBounds}");
+        sb.AppendLine($"                     search {info.SearchBarBounds} status {info.StatusBarBounds} parent '{info.SearchBarParent}'");
+        sb.AppendLine($"  viewer bounds    : {info.ViewerBounds}");
         sb.AppendLine($"  held bands       : {info.HeldTileCount} ({info.HeldTileMb:N1} MB of pixels)");
         sb.AppendLine($"  cache            : {info.CacheCount} entry(ies), {info.CacheMb:N1} MB of {info.CacheBudgetMb} MB");
         sb.AppendLine($"  process          : private {info.PrivateMb:N1} MB, working set {info.WorkingSetMb:N1} MB");
@@ -103,6 +106,12 @@ internal sealed record PdfDocumentInfo(
     int TileHeight,
     int FirstBandHeight,
     Rectangle ScrollBounds,
+    Rectangle TitleBarBounds,
+    Rectangle ToolbarBounds,
+    Rectangle SearchBarBounds,
+    Rectangle StatusBarBounds,
+    Rectangle ViewerBounds,
+    string SearchBarParent,
     string StatusText,
     string TitleText,
     int HeldTileCount,

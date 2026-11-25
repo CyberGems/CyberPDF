@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using CyberPDF.Common.I18n;
 using CyberPDF.Common.Settings;
 using CyberPDF.Core.Documents;
@@ -46,6 +47,10 @@ public sealed class MainWindow : Form
     private readonly ToolButton _searchPreviousButton = new();
     private readonly ToolButton _searchNextButton = new();
     private readonly ToolButton _searchCloseButton = new();
+    private readonly ToolButton _minimizeButton = new();
+    private readonly ToolButton _maximizeButton = new();
+    private readonly ToolButton _closeButton = new();
+    private ThemedToolTip? _toolTip;
 
     private PdfDocument? _document;
     private bool _diagRequested;
@@ -89,6 +94,7 @@ public sealed class MainWindow : Form
         BuildSearchBar();
         BuildStatusBar();
         BuildLayout();
+        BuildToolTips();
 
         ResumeLayout(false);
 
@@ -122,35 +128,31 @@ public sealed class MainWindow : Form
 
         _titleBar.MouseDown += TitleBarMouseDown;
         _titleBar.MouseDoubleClick += (_, _) => ToggleMaximize();
-        _titleBar.MouseDown += (_, e) =>
-        {
-            if (e.Button == MouseButtons.Left && e.Clicks == 2)
-            {
-                ToggleMaximize();
-            }
-        };
 
-        var close = new ToolButton
-        {
-            Icon = IconKind.Close,
-            Dock = DockStyle.Right,
-            Width = 46,
-            Height = TitleBarHeight,
-            AccessibleName = Strings.Get("CloseDocument"),
-        };
-        close.Click += (_, _) => Close();
-
-        var theme = _themeButton;
-        theme.Icon = IconKind.ThemeDefault;
-        theme.Dock = DockStyle.Right;
-        theme.Width = 40;
-        theme.Height = TitleBarHeight;
-        theme.Click += (_, _) => CycleTheme();
+        ConfigureWindowButton(_themeButton, IconKind.ThemeDefault, Strings.Get("ChangeTheme"), CycleTheme);
+        ConfigureWindowButton(_minimizeButton, IconKind.Minimize, Strings.Get("Minimize"),
+            () => WindowState = FormWindowState.Minimized);
+        ConfigureWindowButton(_maximizeButton, IconKind.Maximize, Strings.Get("Maximize"), ToggleMaximize);
+        ConfigureWindowButton(_closeButton, IconKind.Close, Strings.Get("CloseWindow"), Close);
 
         _titleBar.Controls.Add(_titleLabel);
-        _titleBar.Controls.Add(close);
-        _titleBar.Controls.Add(theme);
-        Controls.Add(_titleBar);
+
+        // Right-docked, the control added last sits closest to the edge, so the
+        // close button goes in last to keep the suite's minimize/maximize/close.
+        _titleBar.Controls.Add(_themeButton);
+        _titleBar.Controls.Add(_minimizeButton);
+        _titleBar.Controls.Add(_maximizeButton);
+        _titleBar.Controls.Add(_closeButton);
+    }
+
+    private static void ConfigureWindowButton(ToolButton button, IconKind icon, string accessibleName, Action onClick)
+    {
+        button.Icon = icon;
+        button.Dock = DockStyle.Right;
+        button.Width = 46;
+        button.Height = TitleBarHeight;
+        button.AccessibleName = accessibleName;
+        button.Click += (_, _) => onClick();
     }
 
     private void BuildToolbar()
@@ -196,7 +198,6 @@ public sealed class MainWindow : Form
         flow.Controls.Add(_searchButton);
 
         _toolbar.Controls.Add(flow);
-        Controls.Add(_toolbar);
     }
 
     private static Panel Separator() => new Panel
@@ -306,7 +307,6 @@ public sealed class MainWindow : Form
 
         _statusBar.Controls.Add(_zoomLabel);
         _statusBar.Controls.Add(_pageLabel);
-        Controls.Add(_statusBar);
     }
 
     /// <summary>
@@ -422,6 +422,12 @@ public sealed class MainWindow : Form
             1280,
             Math.Min(1280, first.Height),
             _scrollBar.Bounds,
+            _titleBar.Bounds,
+            _toolbar.Bounds,
+            _searchBar.Bounds,
+            _statusBar.Bounds,
+            _viewer.Bounds,
+            _searchBar.Parent?.Name ?? "(none)",
             _pageLabel.Text,
             _titleLabel.Text,
             _viewer.TileCount,
@@ -447,6 +453,7 @@ public sealed class MainWindow : Form
             return;
         }
 
+        RunShellSelfTest();
         _viewer.SelectAllOnCurrentPage();
 
         // Extraction runs on the PDFium thread; wait for the selection to arrive.
@@ -470,6 +477,110 @@ public sealed class MainWindow : Form
         }
 
         await RunSearchSelfTestAsync();
+    }
+
+    /// <summary>
+    /// Reports the shell geometry and drives the wheel and the drag, so the four
+    /// defects reported after v0.1.0 stay fixed and a regression shows up as a
+    /// number instead of a screenshot that has to be squinted at.
+    /// </summary>
+    private void RunShellSelfTest()
+    {
+        // 1. The viewer must not span the whole window: with the old dock order
+        //    its client area equalled the form and the chrome overlapped it.
+        Console.Error.WriteLine(
+            $"SHELL: form={ClientSize.Width}x{ClientSize.Height} " +
+            $"viewer={_viewer.ClientSize.Width}x{_viewer.ClientSize.Height} " +
+            $"viewerAt={_viewer.Location} title={_titleBar.Bounds} toolbar={_toolbar.Bounds} " +
+            $"status={_statusBar.Bounds} scroll={_scrollBar.Bounds}");
+
+        var viewerInsideForm = _viewer.Bottom <= _statusBar.Top
+                               && _viewer.Width < ClientSize.Width
+                               && _viewer.Left >= 0;
+        Console.Error.WriteLine($"SHELL: viewerInsideChrome={viewerInsideForm}");
+
+        // 2. The search bar must be parented and land between toolbar and page.
+        Console.Error.WriteLine(
+            $"SHELL: searchParent={_searchBar.Parent?.GetType().Name ?? "(none)"} " +
+            $"searchVisible={_searchBar.Visible}");
+
+        // 3. The wheel: a notch from the window must move the scroll position,
+        //    including when the focus sits on a toolbar button, which is where
+        //    it lands after clicking one and where the old build stopped
+        //    scrolling because the wheel followed the focus.
+        _viewer.ScrollTo(0);
+        var before = _viewer.ScrollY;
+        OnMouseWheel(new MouseEventArgs(MouseButtons.None, 0, 0, 0, -120));
+        Console.Error.WriteLine($"SHELL: wheel {before} -> {_viewer.ScrollY} delta={_viewer.ScrollY - before}");
+        OnMouseWheel(new MouseEventArgs(MouseButtons.None, 0, 0, 0, 120));
+
+        _zoomInButton.Focus();
+        _viewer.ScrollTo(0);
+        before = _viewer.ScrollY;
+        PostMessage(_zoomInButton.Handle, 0x020A, (IntPtr)(-120 << 16), IntPtr.Zero);
+        Application.DoEvents();
+        Console.Error.WriteLine($"SHELL: wheelFromFocusedButton {before} -> {_viewer.ScrollY} " +
+                                $"delta={_viewer.ScrollY - before} focus={ActiveControl?.GetType().Name}");
+        _viewer.ScrollTo(0);
+        _viewer.Focus();
+
+        // 4. The drag: an actual cursor drag on the title strip. Synthetic
+        //    messages do not start the native move loop, so this presses and
+        //    moves the real pointer; a handler that never fires leaves the
+        //    window where it was.
+        var originalLocation = Location;
+        var originalCursor = Cursor.Position;
+        var grab = _titleLabel.PointToScreen(new Point(_titleLabel.Width / 2, _titleLabel.Height / 2));
+        SetCursorPos(grab.X, grab.Y);
+        Application.DoEvents();
+
+        // The window enters a modal move loop on the UI thread when the title is
+        // clicked, so a helper thread has to drive the pointer: code on the UI
+        // thread would be stuck inside that loop and never move the cursor.
+        var driver = new Thread(() =>
+        {
+            Thread.Sleep(150);
+            mouse_event(MouseEventLeftDown, 0, 0, 0, UIntPtr.Zero);
+            for (var step = 1; step <= 8; step++)
+            {
+                SetCursorPos(grab.X - 15 * step, grab.Y + 8 * step);
+                Thread.Sleep(40);
+            }
+            mouse_event(MouseEventLeftUp, 0, 0, 0, UIntPtr.Zero);
+        })
+        {
+            IsBackground = true,
+        };
+        driver.Start();
+
+        var deadline = DateTime.UtcNow.AddSeconds(3);
+        while (DateTime.UtcNow < deadline && _moveLoopExits == 0)
+        {
+            Application.DoEvents();
+            Thread.Sleep(20);
+        }
+        driver.Join(500);
+        Application.DoEvents();
+
+        var moved = Location != originalLocation;
+        Console.Error.WriteLine(
+            $"SHELL: drag moved={moved} from={originalLocation} to={Location} " +
+            $"moveLoop entered={_moveLoopEntries} exited={_moveLoopExits}");
+
+        Location = originalLocation;
+        Cursor.Position = originalCursor;
+        Application.DoEvents();
+
+        // 5. Tooltips are attached to every icon-only control, and the tip for
+        //    the first toolbar button paints with the current palette.
+        Console.Error.WriteLine($"SHELL: tooltips={_toolTip is not null} attachments={_toolTip?.Count ?? 0}");
+        if (Environment.GetCommandLineArgs().Any(a => a.Equals("--tooltip-shot", StringComparison.OrdinalIgnoreCase)))
+        {
+            _toolTip!.ShowNow(_zoomInButton);
+            Application.DoEvents();
+            Thread.Sleep(250);
+            _toolTip.CaptureTo(Path.Combine(Path.GetTempPath(), "cyberpdf-tooltip-shot.png"));
+        }
     }
 
     /// <summary>
@@ -574,12 +685,48 @@ public sealed class MainWindow : Form
 
         _viewer.Dock = DockStyle.Fill;
 
-        // Dock order matters: a Right-docked bar must be added BEFORE the
-        // Fill control, because Fill claims whatever is left when it is added.
-        // Adding Fill first makes it span the full width and cover the bar.
-        host.Controls.Add(_scrollBar);
+        // WinForms lays docked children out from the last one added, so Fill
+        // goes in first and the edges after it. The old order gave the viewer
+        // the whole window: its client area measured the full form, the
+        // scrollbar painted on top of the page and the document opened partly
+        // hidden under the chrome. The same rule orders the top chrome, so the
+        // title strip is added last and lands on the very top.
         host.Controls.Add(_viewer);
+        host.Controls.Add(_scrollBar);
+
         Controls.Add(host);
+        Controls.Add(_statusBar);
+        Controls.Add(_searchBar);
+        Controls.Add(_toolbar);
+        Controls.Add(_titleBar);
+    }
+
+    /// <summary>
+    /// Attaches the shared themed tooltips. Only icon-only controls and hidden
+    /// shortcuts get one; the shortcut, when there is one, rides on the same
+    /// line as a chip.
+    /// </summary>
+    private void BuildToolTips()
+    {
+        _toolTip = new ThemedToolTip();
+
+        _toolTip.Attach(_openButton, () => Strings.Get("Open"), () => "Ctrl+O");
+        _toolTip.Attach(_zoomOutButton, () => Strings.Get("ZoomOut"), () => "Ctrl+-");
+        _toolTip.Attach(_zoomInButton, () => Strings.Get("ZoomIn"), () => "Ctrl++");
+        _toolTip.Attach(_fitWidthButton, () => Strings.Get("FitWidth"), () => "Alt+W");
+        _toolTip.Attach(_rotateLeftButton, () => Strings.Get("RotateLeft"), () => "Alt+R");
+        _toolTip.Attach(_rotateRightButton, () => Strings.Get("RotateRight"), () => "Ctrl+R");
+        _toolTip.Attach(_copyButton, () => Strings.Get("Copy"), () => "Ctrl+C");
+        _toolTip.Attach(_searchButton, () => Strings.Get("Search"), () => "Ctrl+F");
+        _toolTip.Attach(_themeButton, () => Strings.Get("ChangeTheme"), () => "Alt+T");
+        _toolTip.Attach(_minimizeButton, () => Strings.Get("Minimize"), null);
+        _toolTip.Attach(_maximizeButton,
+            () => WindowState == FormWindowState.Maximized ? Strings.Get("Restore") : Strings.Get("Maximize"),
+            () => "F11");
+        _toolTip.Attach(_closeButton, () => Strings.Get("CloseWindow"), () => "Ctrl+W");
+        _toolTip.Attach(_searchPreviousButton, () => Strings.Get("SearchPrevious"), () => "Shift+F3");
+        _toolTip.Attach(_searchNextButton, () => Strings.Get("SearchNext"), () => "F3");
+        _toolTip.Attach(_searchCloseButton, () => Strings.Get("SearchClear"), () => "Esc");
     }
 
     private void WireEvents()
@@ -1104,36 +1251,61 @@ public sealed class MainWindow : Form
 
     // --- Window chrome ------------------------------------------------------
 
-    private bool _dragWindow;
-    private Point _dragCursor;
-    private Point _dragWindowStart;
+    private const int WmNcLeftButtonDown = 0x00A1;
+    private const int WmEnterSizeMove = 0x0231;
+    private const int WmExitSizeMove = 0x0232;
+    private const int HtCaption = 2;
+    private int _moveLoopEntries;
+    private int _moveLoopExits;
 
+    [DllImport("user32.dll")]
+    private static extern bool ReleaseCapture();
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr SendMessage(IntPtr hWnd, int message, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern bool PostMessage(IntPtr hWnd, int message, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetCursorPos(int x, int y);
+
+    [DllImport("user32.dll")]
+    private static extern void mouse_event(uint flags, int dx, int dy, uint data, UIntPtr extraInfo);
+
+    private const uint MouseEventLeftDown = 0x0002;
+    private const uint MouseEventLeftUp = 0x0004;
+
+    /// <summary>
+    /// Hands the drag to Windows. Moving the form from a MouseMove handler does
+    /// not work here: the label covering the title strip receives the mouse and
+    /// the form never sees the movement. The native path also brings Snap and
+    /// drag-to-the-top maximize for free.
+    /// </summary>
     private void TitleBarMouseDown(object? sender, MouseEventArgs e)
     {
         if (e.Button != MouseButtons.Left)
         {
             return;
         }
-        _dragWindow = true;
-        _dragCursor = Cursor.Position;
-        _dragWindowStart = Location;
+        ReleaseCapture();
+        SendMessage(Handle, WmNcLeftButtonDown, HtCaption, IntPtr.Zero);
     }
 
-    protected override void OnMouseMove(MouseEventArgs e)
+    /// <summary>
+    /// The wheel follows the focus in WinForms, and after using a toolbar button
+    /// the focus sits on that button, not on the page. A reader should scroll
+    /// from anywhere in the window, so the window forwards whatever the viewer
+    /// did not already handle.
+    /// </summary>
+    protected override void OnMouseWheel(MouseEventArgs e)
     {
-        base.OnMouseMove(e);
-        if (!_dragWindow)
+        base.OnMouseWheel(e);
+        if (e is HandledMouseEventArgs { Handled: true } || _document is null)
         {
             return;
         }
-        var delta = new Point(Cursor.Position.X - _dragCursor.X, Cursor.Position.Y - _dragCursor.Y);
-        Location = new Point(_dragWindowStart.X + delta.X, _dragWindowStart.Y + delta.Y);
-    }
-
-    protected override void OnMouseUp(MouseEventArgs e)
-    {
-        base.OnMouseUp(e);
-        _dragWindow = false;
+        _viewer.ScrollByWheel(e.Delta);
     }
 
     private void ToggleMaximize()
@@ -1209,6 +1381,18 @@ public sealed class MainWindow : Form
                 Rotate(90);
                 e.Handled = true;
                 break;
+            case Keys.R when e.Alt:
+                Rotate(-90);
+                e.Handled = true;
+                break;
+            case Keys.W when e.Alt:
+                FitWidth();
+                e.Handled = true;
+                break;
+            case Keys.T when e.Alt:
+                CycleTheme();
+                e.Handled = true;
+                break;
             case Keys.C when e.Control:
                 CopySelection();
                 e.Handled = true;
@@ -1219,6 +1403,10 @@ public sealed class MainWindow : Form
                 break;
             case Keys.F when e.Control:
                 OpenSearch();
+                e.Handled = true;
+                break;
+            case Keys.F3 when e.Shift:
+                _viewer.GoToPreviousMatch();
                 e.Handled = true;
                 break;
             case Keys.F3:
@@ -1245,6 +1433,10 @@ public sealed class MainWindow : Form
     protected override void OnResize(EventArgs e)
     {
         base.OnResize(e);
+        if (_maximizeButton.Icon != IconKind.None)
+        {
+            _maximizeButton.Icon = WindowState == FormWindowState.Maximized ? IconKind.Restore : IconKind.Maximize;
+        }
         // Keep the page fitted to the window while the user has not chosen a zoom
         // level explicitly, which is what every reader does on resize.
         if (!_userZoomed && _document is not null && WindowState != FormWindowState.Minimized)
@@ -1301,6 +1493,13 @@ public sealed class MainWindow : Form
         _searchResults.Width = (int)Math.Round(110 * scale);
         _pageLabel.Width = (int)Math.Round(260 * scale);
 
+        var titleHeight = (int)Math.Round(TitleBarHeight * scale);
+        foreach (var windowButton in new[] { _themeButton, _minimizeButton, _maximizeButton, _closeButton })
+        {
+            windowButton.Size = new Size((int)Math.Round(46 * scale), titleHeight);
+        }
+        _maximizeButton.Icon = WindowState == FormWindowState.Maximized ? IconKind.Restore : IconKind.Maximize;
+
         foreach (Control control in _toolbar.Controls)
         {
             if (control is not FlowLayoutPanel flow)
@@ -1336,6 +1535,14 @@ public sealed class MainWindow : Form
             Activate();
             return;
         }
+        if (m.Msg == WmEnterSizeMove)
+        {
+            _moveLoopEntries++;
+        }
+        else if (m.Msg == WmExitSizeMove)
+        {
+            _moveLoopExits++;
+        }
         base.WndProc(ref m);
     }
 
@@ -1361,6 +1568,7 @@ public sealed class MainWindow : Form
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
         SaveViewState();
+        _toolTip?.Dispose();
         base.OnFormClosing(e);
     }
 

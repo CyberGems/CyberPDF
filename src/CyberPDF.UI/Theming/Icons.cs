@@ -110,6 +110,23 @@ public static class Icons
                 g.DrawLine(pen, 10.2f, 10.2f, 14f, 14f);
                 break;
 
+            case IconKind.Minimize:
+                g.DrawLine(pen, 3.5f, 8, 12.5f, 8);
+                break;
+
+            case IconKind.Maximize:
+                g.DrawRectangle(pen, 3.5f, 3.5f, 9f, 9f);
+                break;
+
+            case IconKind.Restore:
+                // Two offset frames, the usual "restore down" metaphor.
+                g.DrawRectangle(pen, 3.5f, 5.5f, 7f, 7f);
+                g.DrawLines(pen, new[]
+                {
+                    new PointF(5.5f, 3.5f), new PointF(12.5f, 3.5f), new PointF(12.5f, 10.5f), new PointF(10.5f, 10.5f),
+                });
+                break;
+
             case IconKind.Copy:
                 // Two offset sheets, the usual "copy" metaphor.
                 g.DrawRectangle(pen, 2, 2, 8f, 8f);
@@ -140,4 +157,7 @@ public enum IconKind
     NextPage,
     Search,
     Copy,
+    Minimize,
+    Maximize,
+    Restore,
 }

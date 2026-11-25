@@ -119,8 +119,12 @@ CyberPDF.exe --shot salida.png documento.pdf
 | `Ctrl++` / `Ctrl+-` | Acercar / alejar |
 | `Ctrl+0` | Tamaño real |
 | `Ctrl+R` | Girar en sentido horario |
+| `Alt+R` | Girar en sentido antihorario |
+| `Alt+W` | Ajustar al ancho |
+| `Alt+T` | Cambiar tema |
 | `Ctrl+F` | Buscar en el documento |
 | `F3` | Siguiente coincidencia |
+| `Shift+F3` | Coincidencia anterior |
 | `Ctrl+C` | Copiar la selección |
 | `Ctrl+A` | Seleccionar la página actual |
 | `Ctrl+W` | Cerrar |

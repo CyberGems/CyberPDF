@@ -28,6 +28,11 @@ public static class Strings
         ["RotateLeft"] = ("Rotate left", "Girar a la izquierda"),
         ["RotateRight"] = ("Rotate right", "Girar a la derecha"),
         ["Settings"] = ("Settings", "Ajustes"),
+        ["ChangeTheme"] = ("Change theme", "Cambiar tema"),
+        ["Minimize"] = ("Minimize", "Minimizar"),
+        ["Maximize"] = ("Maximize", "Maximizar"),
+        ["Restore"] = ("Restore", "Restaurar"),
+        ["CloseWindow"] = ("Close window", "Cerrar ventana"),
 
         // Status bar
         ["PageOf"] = ("Page {0} of {1}", "Página {0} de {1}"),
