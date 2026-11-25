@@ -6,8 +6,9 @@ publish-win32/
 publish-win-arm64/
 publish-test*/
 
-# Installer output
+# Installer and portable output
 CyberPDF-Setup-*.exe
+CyberPDF-*-Portable-win-*.zip
 *.iss.tmp
 
 # Fetched native binaries. Restored on demand by scripts/Fetch-Pdfium.ps1 and
