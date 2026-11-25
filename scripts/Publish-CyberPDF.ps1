@@ -1,13 +1,14 @@
 <#
 .SYNOPSIS
-    Publishes CyberPDF as a self-contained single-file executable.
+    Publishes CyberPDF as a self-contained folder build.
 
 .DESCRIPTION
     Produces a build that runs without the .NET runtime installed, matching the
-    rest of the suite. The native PDFium DLL is copied beside the executable
-    because a native library cannot live inside the single-file bundle without
-    an extraction step, and extracting per launch would cost more startup time
-    than the single extra file saves.
+    rest of the suite. It is a folder rather than a single-file bundle because
+    the single-file host measured four times the private memory on an empty
+    window. The native PDFium DLL is copied beside the executable, since a
+    native library cannot live inside a managed bundle without extracting it on
+    every launch.
 
 .PARAMETER OutputDirectory
     Where the published build is written. Defaults to publish-win64.
@@ -79,8 +80,8 @@ if (Test-Path $topLicense) {
     Copy-Item -Path $topLicense -Destination (Join-Path $outputPath 'licenses/pdfium-binaries.txt') -Force
 }
 
-# Sanity checks: the exe exists, it is a real single file, and the engine is
-# beside it. A publish that silently produced a broken bundle is worse than a
+# Sanity checks: the exe exists, the runtime is beside it, and the engine is
+# beside it. A publish that silently produced a broken folder is worse than a
 # failed publish.
 $exe = Join-Path $outputPath 'CyberPDF.exe'
 if (-not (Test-Path $exe)) {
