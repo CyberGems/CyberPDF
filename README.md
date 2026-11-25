@@ -32,7 +32,7 @@ implemented yet.
   it, drag its edge to resize; click either to jump to that page
 - The panel, its tab and its width come back on the next launch, like the theme
 - One window per session: opening a second PDF hands it to the running window
-- Zoom from 10% to 800%, fit width, 100% reset
+- Zoom from 10% to 800%, fit width, fit whole page, 100% reset
 - Rotation in 90 degree steps
 - Three themes: Default, Gray and Light
 - English and Spanish interface
@@ -120,6 +120,7 @@ CyberPDF.exe --shot out.png document.pdf
 | `Ctrl+R` | Rotate clockwise |
 | `Alt+R` | Rotate counterclockwise |
 | `Alt+W` | Fit width |
+| `Alt+P` | Fit whole page |
 | `Alt+T` | Change theme |
 | `Ctrl+F` | Search in the document |
 | `F4` | Thumbnails and bookmarks |

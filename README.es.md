@@ -38,7 +38,7 @@ impresión todavía no están implementados.
   cualquiera para saltar a esa página
 - El panel, su pestaña y su ancho vuelven en el siguiente inicio, igual que el tema
 - Una sola ventana por sesión: abrir un segundo PDF lo entrega a la ventana activa
-- Zoom de 10% a 800%, ajustar al ancho, volver al 100%
+- Zoom de 10% a 800%, ajustar al ancho, ajustar la página completa, volver al 100%
 - Rotación en pasos de 90 grados
 - Tres temas: Predeterminado, Gris y Claro
 - Interfaz en inglés y español
@@ -128,6 +128,7 @@ CyberPDF.exe --shot salida.png documento.pdf
 | `Ctrl+R` | Girar en sentido horario |
 | `Alt+R` | Girar en sentido antihorario |
 | `Alt+W` | Ajustar al ancho |
+| `Alt+P` | Ajustar página completa |
 | `Alt+T` | Cambiar tema |
 | `Ctrl+F` | Buscar en el documento |
 | `F4` | Miniaturas y marcadores |

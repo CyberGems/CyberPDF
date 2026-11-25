@@ -36,6 +36,7 @@ public sealed class MainWindow : Form
     private readonly ToolButton _zoomOutButton = new();
     private readonly ToolButton _zoomInButton = new();
     private readonly ToolButton _fitWidthButton = new();
+    private readonly ToolButton _fitPageButton = new();
     private readonly ToolButton _rotateLeftButton = new();
     private readonly ToolButton _rotateRightButton = new();
     private readonly ToolButton _themeButton = new();
@@ -183,6 +184,7 @@ public sealed class MainWindow : Form
         ConfigureButton(_zoomOutButton, IconKind.ZoomOut, null, () => ChangeZoom(1 / 1.25f));
         ConfigureButton(_zoomInButton, IconKind.ZoomIn, null, () => ChangeZoom(1.25f));
         ConfigureButton(_fitWidthButton, IconKind.FitWidth, null, FitWidth);
+        ConfigureButton(_fitPageButton, IconKind.FitPage, null, FitPage);
         ConfigureButton(_rotateLeftButton, IconKind.RotateLeft, null, () => Rotate(-90));
         ConfigureButton(_rotateRightButton, IconKind.RotateRight, null, () => Rotate(90));
         ConfigureButton(_copyButton, IconKind.Copy, Strings.Get("Copy"), CopySelection);
@@ -196,6 +198,7 @@ public sealed class MainWindow : Form
         flow.Controls.Add(_zoomOutButton);
         flow.Controls.Add(_zoomInButton);
         flow.Controls.Add(_fitWidthButton);
+        flow.Controls.Add(_fitPageButton);
         flow.Controls.Add(Separator());
         flow.Controls.Add(_rotateLeftButton);
         flow.Controls.Add(_rotateRightButton);
@@ -619,7 +622,21 @@ public sealed class MainWindow : Form
                 $"stored={_settings.ViewStates.GetValueOrDefault(NormalizePath(_documentPath!))?.SidePanelOpen?.ToString() ?? "(none)"}");
         }
 
-        // 8. Panel persistence: the state is written and read back from the same
+        // 8. Fit page: the whole page must fit, so the resulting slot is never
+        //    taller than the viewport.
+        if (Environment.GetCommandLineArgs().Any(a => a.Equals("--fit-page", StringComparison.OrdinalIgnoreCase)))
+        {
+            var zoomBefore = _viewer.Zoom;
+            FitPage();
+            Application.DoEvents();
+            var slot = _viewer.LayoutSlots.Count > 0 ? _viewer.LayoutSlots[0] : default;
+            Console.Error.WriteLine(
+                $"SHELL: fitPage zoom {zoomBefore:P0}->{_viewer.Zoom:P0} slot={slot.Width}x{slot.Height} " +
+                $"viewport={_viewer.ClientSize.Width}x{_viewer.ClientSize.Height} " +
+                $"fits={slot.Height <= _viewer.ClientSize.Height && slot.Width <= _viewer.ClientSize.Width}");
+        }
+
+        // 9. Panel persistence: the state is written and read back from the same
         //    file the next launch uses.
         if (Environment.GetCommandLineArgs().Any(a => a.Equals("--panel-persist", StringComparison.OrdinalIgnoreCase)))
         {
@@ -784,6 +801,7 @@ public sealed class MainWindow : Form
         _toolTip.Attach(_zoomOutButton, () => Strings.Get("ZoomOut"), () => "Ctrl+-");
         _toolTip.Attach(_zoomInButton, () => Strings.Get("ZoomIn"), () => "Ctrl++");
         _toolTip.Attach(_fitWidthButton, () => Strings.Get("FitWidth"), () => "Alt+W");
+        _toolTip.Attach(_fitPageButton, () => Strings.Get("FitPage"), () => "Alt+P");
         _toolTip.Attach(_rotateLeftButton, () => Strings.Get("RotateLeft"), () => "Alt+R");
         _toolTip.Attach(_rotateRightButton, () => Strings.Get("RotateRight"), () => "Ctrl+R");
         _toolTip.Attach(_copyButton, () => Strings.Get("Copy"), () => "Ctrl+C");
@@ -1353,6 +1371,61 @@ public sealed class MainWindow : Form
         ApplyZoom(FitWidthZoomFor(_viewer.FirstVisiblePage));
     }
 
+    /// <summary>
+    /// Zoom that fits the whole page inside the viewport, both dimensions. Used
+    /// for pages taller than the screen, where fit-width alone still leaves the
+    /// reader scrolling to see a single page.
+    /// </summary>
+    private float FitPageZoomFor(int pageIndex)
+    {
+        if (_document is null)
+        {
+            return 1f;
+        }
+        var size = _document.GetPageSize(pageIndex);
+        var scale = _viewer.DeviceDpi / 96f;
+        if (scale <= 0)
+        {
+            scale = 1f;
+        }
+
+        var viewportWidth = _viewer.ClientSize.Width;
+        var viewportHeight = _viewer.ClientSize.Height;
+        if (viewportWidth <= 0 || viewportHeight <= 0 || size.Width <= 0 || size.Height <= 0)
+        {
+            return 1f;
+        }
+
+        var gutter = Math.Max(24, (int)(Math.Min(viewportWidth, viewportHeight) * 0.04));
+        var availableWidth = viewportWidth - gutter * 2;
+        var availableHeight = viewportHeight - gutter * 2;
+        if (availableWidth <= 0 || availableHeight <= 0)
+        {
+            return 1f;
+        }
+
+        // The tighter of the two constraints is what makes the whole page fit.
+        var byWidth = availableWidth / (size.Width * scale);
+        var byHeight = availableHeight / (size.Height * scale);
+        return Math.Min(byWidth, byHeight);
+    }
+
+    private void FitPage()
+    {
+        if (_document is null)
+        {
+            return;
+        }
+        var page = _viewer.FirstVisiblePage;
+        var zoom = Math.Clamp(FitPageZoomFor(page), 0.1f, 8f);
+
+        // A rotation swaps the page's visual axes, so the computed zoom is for
+        // the rotated page: GetPageSize already reports the rotated size, and
+        // ApplyZoom rebuilds the layout, which is enough.
+        ApplyZoom(zoom);
+        _viewer.ScrollToPage(page);
+    }
+
     private void Rotate(int degrees)
     {
         _rotation = ((_rotation + degrees) % 360 + 360) % 360;
@@ -1450,6 +1523,7 @@ public sealed class MainWindow : Form
         _zoomInButton.Enabled = hasDocument;
         _zoomOutButton.Enabled = hasDocument;
         _fitWidthButton.Enabled = hasDocument;
+        _fitPageButton.Enabled = hasDocument;
         _rotateLeftButton.Enabled = hasDocument;
         _rotateRightButton.Enabled = hasDocument;
         _copyButton.Enabled = hasDocument && _viewer.HasSelection;
@@ -1634,6 +1708,10 @@ public sealed class MainWindow : Form
                 break;
             case Keys.W when e.Alt:
                 FitWidth();
+                e.Handled = true;
+                break;
+            case Keys.P when e.Alt:
+                FitPage();
                 e.Handled = true;
                 break;
             case Keys.T when e.Alt:
