@@ -609,7 +609,17 @@ public sealed class MainWindow : Form
             SetSidePanelVisible(wasOpen, persist: false);
         }
 
-        // 7. Panel persistence: the state is written and read back from the same
+        // 7. Per-document panel state: a document that chose closed must not
+        //    follow the global preference left open by another file.
+        if (Environment.GetCommandLineArgs().Any(a => a.Equals("--panel-per-doc", StringComparison.OrdinalIgnoreCase)))
+        {
+            Console.Error.WriteLine(
+                $"SHELL: perDoc file='{Path.GetFileName(_documentPath)}' " +
+                $"panelVisible={_sidePanel.Visible} mode={_sidePanel.Mode} " +
+                $"stored={_settings.ViewStates.GetValueOrDefault(NormalizePath(_documentPath!))?.SidePanelOpen?.ToString() ?? "(none)"}");
+        }
+
+        // 8. Panel persistence: the state is written and read back from the same
         //    file the next launch uses.
         if (Environment.GetCommandLineArgs().Any(a => a.Equals("--panel-persist", StringComparison.OrdinalIgnoreCase)))
         {
@@ -820,6 +830,14 @@ public sealed class MainWindow : Form
         _sidePanel.ModeChanged += (_, _) =>
         {
             _settings.SidePanelTab = _sidePanel.Mode;
+            if (_documentPath is not null)
+            {
+                var key = NormalizePath(_documentPath);
+                if (_settings.ViewStates.TryGetValue(key, out var state))
+                {
+                    state.SidePanelTab = _sidePanel.Mode;
+                }
+            }
             _store.Save(_settings);
         };
         _sidePanel.ResizeRequested += (_, width) => ResizeSidePanel(width);
@@ -912,9 +930,20 @@ public sealed class MainWindow : Form
         RememberRecent(path);
         ApplyStoredViewState(path);
 
-        // After the stored zoom, so restoring the panel does not fight it.
-        if (_settings.SidePanelOpen)
+        // After the stored zoom, so restoring the panel does not fight it. The
+        // document's own choice wins; its tab comes back with it. A document
+        // opened for the first time follows the global preference.
+        var stored = _settings.RememberPagePosition
+                     && _settings.ViewStates.TryGetValue(path, out var state)
+            ? state
+            : null;
+        var panelOpen = stored?.SidePanelOpen ?? _settings.SidePanelOpen;
+        if (panelOpen)
         {
+            if (stored?.SidePanelTab is int tab)
+            {
+                _settings.SidePanelTab = tab;
+            }
             SetSidePanelVisible(true, persist: false);
         }
         else
@@ -1126,7 +1155,20 @@ public sealed class MainWindow : Form
 
         if (persist)
         {
+            // Remembered globally for the next document that has no entry of its
+            // own, and per document so this file keeps its own choice.
             _settings.SidePanelOpen = visible;
+            if (_documentPath is not null)
+            {
+                var key = NormalizePath(_documentPath);
+                if (!_settings.ViewStates.TryGetValue(key, out var state))
+                {
+                    state = new DocumentViewState();
+                    _settings.ViewStates[key] = state;
+                }
+                state.SidePanelOpen = visible;
+                state.SidePanelTab = _sidePanel.Mode;
+            }
             _store.Save(_settings);
         }
         _viewer.Focus();
@@ -1448,6 +1490,8 @@ public sealed class MainWindow : Form
             Page = _viewer.FirstVisiblePage,
             Zoom = _viewer.Zoom,
             Rotation = _viewer.Rotation,
+            SidePanelOpen = _sidePanel.Visible,
+            SidePanelTab = _sidePanel.Mode,
         };
         _store.Save(_settings);
     }

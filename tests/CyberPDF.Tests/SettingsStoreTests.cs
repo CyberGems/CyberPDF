@@ -174,6 +174,42 @@ public sealed class SettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public void PerDocumentPanelStateSurvivesAndStaysDistinct()
+    {
+        // The point of the per-document field: one document can keep the panel
+        // closed while another keeps it open, with the global flag untouched.
+        var store = new SettingsStore(_file);
+        var settings = new AppSettings { SidePanelOpen = true };
+        settings.ViewStates[@"C:\docs\long.pdf"] = new DocumentViewState { SidePanelOpen = false, SidePanelTab = 0 };
+        settings.ViewStates[@"C:\docs\outline.pdf"] = new DocumentViewState { SidePanelOpen = true, SidePanelTab = 1 };
+        store.Save(settings);
+
+        var loaded = store.Load();
+
+        Assert.True(loaded.SidePanelOpen);
+        Assert.False(loaded.ViewStates[@"C:\docs\long.pdf"].SidePanelOpen);
+        Assert.True(loaded.ViewStates[@"C:\docs\outline.pdf"].SidePanelOpen);
+        Assert.Equal(1, loaded.ViewStates[@"C:\docs\outline.pdf"].SidePanelTab);
+    }
+
+    [Fact]
+    public void UnsetPerDocumentPanelStateStaysNull()
+    {
+        // Null is not "closed": it means the document never chose, so the global
+        // preference must apply. A default of false would silently close the
+        // panel for every document saved before this field existed.
+        var store = new SettingsStore(_file);
+        var settings = new AppSettings();
+        settings.ViewStates[@"C:\docs\plain.pdf"] = new DocumentViewState { Page = 3 };
+        store.Save(settings);
+
+        var loaded = store.Load();
+
+        Assert.Null(loaded.ViewStates[@"C:\docs\plain.pdf"].SidePanelOpen);
+        Assert.Null(loaded.ViewStates[@"C:\docs\plain.pdf"].SidePanelTab);
+    }
+
+    [Fact]
     public void SaveCreatesTheDirectoryWhenMissing()
     {
         var nested = Path.Combine(_directory, "nested", "deeper", "settings.json");

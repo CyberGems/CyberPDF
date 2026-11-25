@@ -29,7 +29,11 @@ public sealed class AppSettings
 
     public bool RememberPagePosition { get; set; } = true;
 
-    /// <summary>Whether the thumbnails and bookmarks panel is open.</summary>
+    /// <summary>
+    /// Whether the side panel is open, for documents that were never opened
+    /// before. A document with its own choice in <see cref="DocumentViewState"/>
+    /// overrides this.
+    /// </summary>
     public bool SidePanelOpen { get; set; }
 
     /// <summary>Panel tab: 0 is pages, 1 is bookmarks.</summary>
@@ -69,4 +73,14 @@ public sealed class DocumentViewState
 
     /// <summary>Rotation in degrees, always a multiple of 90.</summary>
     public int Rotation { get; set; }
+
+    /// <summary>
+    /// Side panel state for this document. Null means the user never chose one
+    /// here, so the global preference applies; a stored false is a document the
+    /// user deliberately reads with the panel closed.
+    /// </summary>
+    public bool? SidePanelOpen { get; set; }
+
+    /// <summary>Panel tab for this document: 0 is pages, 1 is bookmarks.</summary>
+    public int? SidePanelTab { get; set; }
 }
