@@ -49,7 +49,7 @@ Primera versión: un lector de PDF nativo con desplazamiento continuo, zoom ajus
 
 | File | SHA-256 |
 |---|---|
-| `CyberPDF-Setup-{{VERSION}}.exe` | `{{INSTALLER_HASH}}` |
+| `CyberPDF-Setup-{{VERSION_BARE}}.exe` | `{{INSTALLER_HASH}}` |
 | `CyberPDF-{{VERSION}}-Portable-win-x64.zip` | `{{PORTABLE_HASH}}` |
 
 The installer needs no administrator rights and can associate `.pdf` files with CyberPDF. The portable build is a folder: unzip it and run `CyberPDF.exe`.
