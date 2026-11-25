@@ -17,7 +17,9 @@ selection, thumbnails, bookmarks and printing are not implemented yet.
 
 - Opens a document by dialog, drag and drop, or the command line
 - Continuous vertical scrolling with a themed scrollbar, mouse wheel, keyboard
-  and drag-to-pan
+  and middle-button panning
+- Select and copy text: drag, double click for a word, triple click for a line
+- One window per session: opening a second PDF hands it to the running window
 - Zoom from 10% to 800%, fit width, 100% reset
 - Rotation in 90 degree steps
 - Three themes: Default, Gray and Light
@@ -51,7 +53,8 @@ Self-contained build, no .NET runtime needed, measured on the development machin
 | Memory, empty window | 19 MB private (59 MB working set) |
 | Memory, ordinary document | 24 MB private (65 MB working set) |
 | Memory, worst-case tall page | 50 MB private (91 MB working set) |
-| Published folder | 117 MB (the installer compresses it) |
+| Installer download | 38 MB |
+| Installed | 122 MB |
 
 For reference, the Foxit Reader 5.3 this replaces starts in 0.38 s and uses 64 MB.
 

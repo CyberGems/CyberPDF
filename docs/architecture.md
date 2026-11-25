@@ -70,6 +70,14 @@ Self-contained folder publish (no .NET runtime required):
 | Ordinary one-page document | ~0.24 s | 65 MB | 24 MB |
 | One page 1,200 x 4,069 pt (worst case) | ~0.36 s | 91 MB | 50 MB |
 
+Installed build, launched from the program files folder:
+
+| | |
+|---|---|
+| Installer download | 38 MB (compresses the 122 MB install) |
+| Installed | 122 MB |
+| Private memory with a document open | 41 MB |
+
 The worst-case document holds 4 bands, 27 MB of pixels, against a 64 MB cache
 budget. After three full scroll passes and six zoom changes the process returns to
 a steady state instead of accumulating.
@@ -88,7 +96,6 @@ Phase 0 is a reader skeleton. Missing, in rough order of value:
 
 - Tabs
 - Search with highlighting
-- Text selection and copy (the text layer exists and is tested)
 - Thumbnails and bookmarks
 - Password entry for protected documents (detection already maps the error)
 - Links

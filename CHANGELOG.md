@@ -17,6 +17,12 @@ All notable changes to CyberPDF are documented here. The format follows
 - English and Spanish interface
 - Recent files, and page, zoom and rotation restored per document
 - Password protected documents are detected and reported with a clear message
+- Text selection with copy: drag to select, double click for a word, triple click
+  for a line, Ctrl+C to copy, and a themed context menu on the page
+- One window per session: opening another PDF in Explorer hands it to the running
+  window instead of starting a second copy
+- Inno Setup installer with optional `.pdf` association, both languages and no
+  administrator rights required
 - Pages render in horizontal bands, straight into the window bitmap, so pixels
   are stored once and a tall page never needs a single huge buffer
 - Hidden `--diag`, `--diag --stress` and `--shot` modes for verifying a build and
@@ -35,6 +41,13 @@ All notable changes to CyberPDF are documented here. The format follows
 - Archivos recientes, y página, zoom y rotación restaurados por documento
 - Los documentos protegidos con contraseña se detectan y se informan con un
   mensaje claro
+- Selección de texto con copia: arrastra para seleccionar, doble clic para una
+  palabra, triple clic para una línea, Ctrl+C para copiar, y un menú contextual
+  temático sobre la página
+- Una sola ventana por sesión: abrir otro PDF desde el Explorador lo entrega a la
+  ventana activa en lugar de iniciar una segunda copia
+- Instalador Inno Setup con asociación `.pdf` opcional, ambos idiomas y sin
+  necesidad de administrador
 - Las páginas se generan en franjas horizontales, directamente sobre el mapa de
   bits de la ventana, así los píxeles se guardan una sola vez y una página alta
   nunca necesita un búfer enorme

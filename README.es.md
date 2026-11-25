@@ -20,7 +20,10 @@ implementados.
 - Abre un documento con el diálogo, arrastrando un archivo o desde la línea de
   comandos
 - Desplazamiento vertical continuo con barra temática, rueda del ratón, teclado y
-  arrastre para moverse
+  arrastre con el botón central
+- Selecciona y copia texto: arrastra, doble clic para una palabra, triple clic
+  para una línea
+- Una sola ventana por sesión: abrir un segundo PDF lo entrega a la ventana activa
 - Zoom de 10% a 800%, ajustar al ancho, volver al 100%
 - Rotación en pasos de 90 grados
 - Tres temas: Predeterminado, Gris y Claro
@@ -56,7 +59,8 @@ de desarrollo:
 | Memoria, ventana vacía | 19 MB privados (59 MB residentes) |
 | Memoria, documento normal | 24 MB privados (65 MB residentes) |
 | Memoria, página alta extrema | 50 MB privados (91 MB residentes) |
-| Carpeta publicada | 117 MB (el instalador la comprime) |
+| Descarga del instalador | 38 MB |
+| Instalado | 122 MB |
 
 Como referencia, el Foxit Reader 5.3 al que reemplaza arranca en 0,38 s y usa 64 MB.
 
