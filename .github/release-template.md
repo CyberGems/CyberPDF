@@ -5,6 +5,7 @@
 ## 📄 CyberPDF {{VERSION}}: Release Notes
 
 <!-- IMPORTANT FOR AGENTS & MAINTAINERS: rewrite this whole section with the actual notes for this release before tagging. Never leave the previous version's notes here. -->
+<!-- COVERAGE: list every commit since the previous tag before drafting. Give every user-facing change at least one highlight and group related commits into one. Skip internal refactors, CI, tests and dependency bumps with no visible effect; keep small visible fixes such as copy, tooltips, shortcuts, themes, icons, spacing, stability and perceptible performance. Review the draft if 15+ user-facing commits produce fewer than 6 highlights, or 40+ total commits fewer than 8. Patch releases may have 1-3 highlights or a plain maintenance-only note. -->
 
 > **New to CyberPDF?** A fast, lightweight PDF reader for Windows, built to open in under half a second.
 
