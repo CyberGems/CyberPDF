@@ -87,6 +87,50 @@ jobs:
           $bare = "${{ env.VERSION }}".TrimStart("v")
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=$bare" CyberPDF.iss
 
+      # Upload the freshly built binaries to VirusTotal so the SHA256 links in
+      # the release body resolve as soon as the release is published (new
+      # builds are unknown to VirusTotal until someone submits them).
+      - name: Scan installers with VirusTotal
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
+        run: |
+          $bare = "${{ env.VERSION }}".TrimStart("v")
+          $installerPath = "./CyberPDF-Setup-$bare.exe"
+          $portablePath = "./CyberPDF-${{ env.VERSION }}-Portable-win-x64.zip"
+
+          if ($env:VIRUSTOTAL_API_KEY) {
+            function Upload-VirusTotal($filePath, $apiKey) {
+              $item = Get-Item $filePath
+              $sizeMb = [Math]::Round($item.Length / 1MB, 2)
+              Write-Host "Uploading $filePath ($sizeMb MB) to VirusTotal..."
+              $headers = @{ "x-apikey" = $apiKey }
+              $url = "https://www.virustotal.com/api/v3/files"
+
+              if ($item.Length -gt 30MB) {
+                $urlResp = Invoke-RestMethod -Uri "https://www.virustotal.com/api/v3/files/upload_url" -Method Get -Headers $headers -TimeoutSec 60
+                $url = $urlResp.data
+              }
+
+              $resp = & curl.exe -s -S --fail -X POST -H "x-apikey: $apiKey" -F "file=@$filePath" "$url"
+              Write-Host "Upload successful. Response: $resp"
+            }
+
+            try {
+              Upload-VirusTotal $installerPath $env:VIRUSTOTAL_API_KEY
+            } catch {
+              Write-Warning "VirusTotal installer upload warning: $_"
+            }
+
+            try {
+              Upload-VirusTotal $portablePath $env:VIRUSTOTAL_API_KEY
+            } catch {
+              Write-Warning "VirusTotal portable upload warning: $_"
+            }
+          } else {
+            Write-Host "VIRUSTOTAL_API_KEY secret not found; skipping direct upload and using computed SHA256 hashes for reports."
+          }
       - name: Prepare Release Notes
         shell: pwsh
         run: |
