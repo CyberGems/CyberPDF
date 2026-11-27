@@ -864,11 +864,20 @@ public sealed class PageViewer : Control
             var top = slot.Top - _scrollY;
             var pageRect = new Rectangle(left, top, slot.Width, slot.Height);
 
-            // Paper first: a band that has not arrived yet must read as an empty
-            // page, not as a hole in the document.
+            // Paper, border and soft drop shadow: a band that has not arrived yet
+            // still reads as a page rather than a hole in the document.
+            var shadowRect = new Rectangle(left + 2, top + 2, slot.Width, slot.Height);
+            using (var shadow = new SolidBrush(Theme.PageShadow))
+            {
+                graphics.FillRectangle(shadow, shadowRect);
+            }
             using (var paper = new SolidBrush(Theme.Paper))
             {
                 graphics.FillRectangle(paper, pageRect);
+            }
+            using (var pageBorder = new Pen(Theme.PageBorder))
+            {
+                graphics.DrawRectangle(pageBorder, left - 1, top - 1, slot.Width + 1, slot.Height + 1);
             }
 
             for (var bandTop = 0; bandTop < slot.Height; bandTop += TileHeight)

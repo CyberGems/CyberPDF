@@ -42,6 +42,7 @@ public sealed class SidePanel : Control
     private int _currentPage;
     private int _hoverIndex = -1;
     private int _hoverBookmark = -1;
+    private int _hoverTab = -1;
     private int _requestedCount;
 
     public SidePanel(PdfEngine engine)
@@ -222,45 +223,68 @@ public sealed class SidePanel : Control
             {
                 if (IsDisposed)
                 {
+                    if (result.CallerOwns)
+                    {
+                        result.Page.Dispose();
+                    }
                     return;
                 }
+
+                // Copy on the worker thread while the cached bitmap is still
+                // guaranteed alive; a concurrent DropCachedPages on zoom/refit
+                // could otherwise free a cache-owned page before BeginInvoke runs.
+                Bitmap? copy = null;
+                try
+                {
+                    var page = result.Page;
+                    if (!page.IsDisposed)
+                    {
+                        copy = new Bitmap(page.Width, page.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                        using var graphics = Graphics.FromImage(copy);
+                        graphics.Clear(Color.White);
+                        graphics.DrawImageUnscaled(page.Bitmap, 0, 0);
+                    }
+                }
+                finally
+                {
+                    if (result.CallerOwns)
+                    {
+                        result.Page.Dispose();
+                    }
+                }
+
+                if (copy is null)
+                {
+                    return;
+                }
+
                 try
                 {
                     BeginInvoke(() =>
                     {
-                        if (document != _document)
+                        if (IsDisposed || document != _document)
                         {
+                            copy.Dispose();
                             return;
                         }
-                        Store(pageIndex, result);
+                        Store(pageIndex, copy);
                     });
                 }
                 catch (InvalidOperationException)
                 {
                     // The window closed while the miniature was rendering.
+                    copy.Dispose();
                 }
             },
             onError: error => Console.Error.WriteLine($"THUMB {pageIndex}: {error.Message}"));
     }
 
-    private void Store(int pageIndex, RenderResult result)
+    private void Store(int pageIndex, Bitmap copy)
     {
-        var page = result.Page;
-
-        // Copy instead of keeping the rendered page: the engine may hand a
-        // caller-owned page that nobody else frees, and a cached band must not be
-        // disposed by the panel. A thumbnail is a few hundred kilobytes.
-        var copy = new Bitmap(page.Width, page.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-        using (var graphics = Graphics.FromImage(copy))
+        if (_thumbCache.TryGetValue(pageIndex, out var existing))
         {
-            graphics.Clear(Color.White);
-            graphics.DrawImageUnscaled(page.Bitmap, 0, 0);
+            existing.Dispose();
         }
-        if (result.CallerOwns)
-        {
-            page.Dispose();
-        }
-
         _thumbCache[pageIndex] = copy;
         _thumbOrder.Add(pageIndex);
         while (_thumbOrder.Count > CacheLimit)
@@ -373,18 +397,30 @@ public sealed class SidePanel : Control
             g.FillRectangle(strip, 0, 0, Width, TabHeight);
         }
 
+        if (_hoverTab == 0 && _mode != 0)
+        {
+            using var hover = new SolidBrush(Theme.Hover);
+            g.FillRectangle(hover, thumbs);
+        }
+        else if (_hoverTab == 1 && _mode != 1)
+        {
+            using var hover = new SolidBrush(Theme.Hover);
+            g.FillRectangle(hover, marks);
+        }
+
         DrawTabLabel(g, Strings.Get("Thumbnails"), thumbs, _mode == 0);
         DrawTabLabel(g, Strings.Get("Bookmarks"), marks, _mode == 1);
 
         using var border = new Pen(Theme.Border);
         g.DrawLine(border, 0, TabHeight - 1, Width, TabHeight - 1);
+        using var accent = new Pen(Theme.Accent, 2f);
         if (_mode == 0)
         {
-            g.DrawLine(new Pen(Theme.Accent, 2f), 0, TabHeight - 2, half, TabHeight - 2);
+            g.DrawLine(accent, 0, TabHeight - 2, half, TabHeight - 2);
         }
         else
         {
-            g.DrawLine(new Pen(Theme.Accent, 2f), half, TabHeight - 2, Width, TabHeight - 2);
+            g.DrawLine(accent, half, TabHeight - 2, Width, TabHeight - 2);
         }
     }
 
@@ -423,7 +459,9 @@ public sealed class SidePanel : Control
             }
 
             var selected = slot.PageIndex == _currentPage;
-            using (var pen = new Pen(selected ? Theme.Accent : Theme.Border, selected ? 2f : 1f))
+            var hovered = slot.PageIndex == _hoverIndex && !selected;
+            var frameColor = selected ? Theme.Accent : hovered ? Theme.BorderStrong : Theme.Border;
+            using (var pen = new Pen(frameColor, selected ? 2f : 1f))
             {
                 g.DrawRectangle(pen, paper);
             }
@@ -550,6 +588,23 @@ public sealed class SidePanel : Control
             return;
         }
 
+        var tab = e.Y < TabHeight ? (e.X < Width / 2 ? 0 : 1) : -1;
+        if (tab != _hoverTab)
+        {
+            _hoverTab = tab;
+            if (tab >= 0)
+            {
+                _hoverIndex = -1;
+                _hoverBookmark = -1;
+                Cursor = Cursors.Hand;
+            }
+            Invalidate();
+        }
+        if (tab >= 0)
+        {
+            return;
+        }
+
         if (IsBookmarks)
         {
             var index = e.Y < TabHeight
@@ -594,6 +649,7 @@ public sealed class SidePanel : Control
         base.OnMouseLeave(e);
         _hoverIndex = -1;
         _hoverBookmark = -1;
+        _hoverTab = -1;
         _hoverSplitter = false;
         Cursor = Cursors.Default;
         Invalidate();

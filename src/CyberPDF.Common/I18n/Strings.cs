@@ -79,6 +79,7 @@ public static class Strings
         ["SearchNoDocument"] = ("Open a document to search", "Abre un documento para buscar"),
         ["SearchClear"] = ("Clear search", "Borrar búsqueda"),
         ["MatchCase"] = ("Match case", "Distinguir mayúsculas"),
+        ["WholeWord"] = ("Whole word", "Palabra completa"),
 
         // Text selection
         ["Copy"] = ("Copy", "Copiar"),

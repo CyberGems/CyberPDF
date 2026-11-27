@@ -1,4 +1,3 @@
-using System.Drawing.Drawing2D;
 using CyberPDF.Common.I18n;
 using CyberPDF.UI.Theming;
 
@@ -35,9 +34,6 @@ public sealed class ContextMenuItem
 /// </summary>
 public sealed class ThemedContextMenu : ContextMenuStrip
 {
-    private const int ItemHeight = 28;
-    private const int IconColumn = 26;
-
     public ThemedContextMenu()
     {
         Renderer = new ThemedRenderer();
@@ -69,6 +65,7 @@ public sealed class ThemedContextMenu : ContextMenuStrip
             {
                 Enabled = item.Enabled,
                 ForeColor = item.Enabled ? Theme.Text : Theme.TextMuted,
+                Tag = item.Icon,
             };
             if (item.Action is { } action)
             {
@@ -80,8 +77,8 @@ public sealed class ThemedContextMenu : ContextMenuStrip
     }
 
     /// <summary>
-    /// Renders every row with the theme palette instead of the system colors,
-    /// so the menu matches the app in all three themes.
+    /// Renders every row and its vector icon with the theme palette instead of
+    /// system colors, so the menu matches the app in all three themes.
     /// </summary>
     private sealed class ThemedRenderer : ToolStripProfessionalRenderer
     {
@@ -103,6 +100,14 @@ public sealed class ThemedContextMenu : ContextMenuStrip
             else if (e.Item.Pressed && e.Item.Enabled)
             {
                 ThemePainter.FillRounded(g, bounds, 4, Theme.Pressed);
+            }
+
+            if (e.Item.Tag is IconKind icon && icon != IconKind.None)
+            {
+                var iconSize = Math.Clamp(e.Item.Height - 10, 12, 16);
+                var iconRect = new Rectangle(8, (e.Item.Height - iconSize) / 2, iconSize, iconSize);
+                var ink = e.Item.Enabled ? Theme.Text : Theme.TextMuted;
+                Icons.Draw(g, icon, iconRect, ink, 1.45f);
             }
         }
 
@@ -158,63 +163,188 @@ public sealed class ThemedContextMenu : ContextMenuStrip
 
 /// <summary>
 /// The context menu for an editable text field: Undo, Redo, Cut, Copy, Paste,
-/// Select all and Delete, each disabled when it cannot apply. Native WinForms
-/// text controls already expose these through the clipboard and their own
-/// commands, so this only routes them.
+/// Select all and Delete, each disabled when it cannot apply.
 /// </summary>
 public static class TextFieldContextMenu
 {
-    /// <summary>
-    /// Shows the standard field menu for <paramref name="field"/>.
-    /// </summary>
-    /// <remarks>
-    /// TextBoxBase exposes Undo but not Redo, so the redo entry is offered only
-    /// when the concrete control implements <see cref="IUndoRedoField"/>. The
-    /// entry still appears when unavailable, disabled, because the suite expects
-    /// every row to be visible and explained by its state.
-    /// </remarks>
     public static void Show(TextBoxBase field, Point screenLocation)
     {
         ArgumentNullException.ThrowIfNull(field);
 
         var hasSelection = field.SelectionLength > 0;
         var canPaste = Clipboard.ContainsText();
-        var canUndo = field.CanUndo;
-        var redo = field as IUndoRedoField;
+        var undoRedo = field as IUndoRedoField;
+        var canUndo = undoRedo is not null ? undoRedo.CanUndo : field.CanUndo;
+        var canRedo = undoRedo?.CanRedo == true;
 
         var menu = ThemedContextMenu.Create(
-            new ContextMenuItem(Common.I18n.Strings.Get("Undo"), () => field.Undo(), IconKind.None, canUndo && field.Enabled),
-            new ContextMenuItem(Common.I18n.Strings.Get("Redo"), () => redo?.Redo(), IconKind.None, redo?.CanRedo == true && field.Enabled),
-            ContextMenuItem.Separator(),
-            new ContextMenuItem(Common.I18n.Strings.Get("Cut"), () => field.Cut(), IconKind.None, hasSelection && !field.ReadOnly),
-            new ContextMenuItem(Common.I18n.Strings.Get("Copy"), () => field.Copy(), IconKind.None, hasSelection),
-            new ContextMenuItem(Common.I18n.Strings.Get("Paste"), () => field.Paste(), IconKind.None, canPaste && !field.ReadOnly),
-            ContextMenuItem.Separator(),
-            new ContextMenuItem(Common.I18n.Strings.Get("SelectAll"), () => field.SelectAll(), IconKind.None, field.TextLength > 0),
-            new ContextMenuItem(Common.I18n.Strings.Get("Delete"), () =>
-            {
-                if (field.SelectionLength > 0)
+            new ContextMenuItem(
+                Strings.Get("Undo"),
+                () =>
                 {
-                    field.SelectedText = string.Empty;
-                }
-                else
-                {
-                    field.SelectedText = string.Empty;
-                }
-            }, IconKind.None, !field.ReadOnly && field.TextLength > 0));
+                    if (undoRedo is not null)
+                    {
+                        undoRedo.Undo();
+                    }
+                    else
+                    {
+                        field.Undo();
+                    }
+                },
+                IconKind.Undo,
+                canUndo && field.Enabled && !field.ReadOnly),
+            new ContextMenuItem(
+                Strings.Get("Redo"),
+                () => undoRedo?.Redo(),
+                IconKind.Redo,
+                canRedo && field.Enabled && !field.ReadOnly),
+            ContextMenuItem.Separator(),
+            new ContextMenuItem(Strings.Get("Cut"), () => field.Cut(), IconKind.Cut, hasSelection && !field.ReadOnly),
+            new ContextMenuItem(Strings.Get("Copy"), () => field.Copy(), IconKind.Copy, hasSelection),
+            new ContextMenuItem(Strings.Get("Paste"), () => field.Paste(), IconKind.Paste, canPaste && !field.ReadOnly),
+            ContextMenuItem.Separator(),
+            new ContextMenuItem(Strings.Get("SelectAll"), () => field.SelectAll(), IconKind.SelectAll, field.TextLength > 0),
+            new ContextMenuItem(Strings.Get("Delete"), () => field.SelectedText = string.Empty, IconKind.Delete, hasSelection && !field.ReadOnly));
 
         menu.Show(screenLocation);
     }
 }
 
 /// <summary>
-/// Redo support for a text field. WinForms' <see cref="TextBox"/> has an internal
-/// redo buffer but no public API for it, so the app owns the history through this
-/// contract and the menu never advertises an action that cannot work.
+/// Undo and Redo support for a text field. WinForms' <see cref="TextBox"/> has
+/// an internal redo buffer without a public API, so <see cref="UndoableTextBox"/>
+/// tracks snapshots directly and exposes both operations through this contract.
 /// </summary>
 public interface IUndoRedoField
 {
+    bool CanUndo { get; }
+
     bool CanRedo { get; }
 
+    void Undo();
+
     void Redo();
+}
+
+/// <summary>
+/// TextBox with full Undo/Redo history and the app's themed right-click menu.
+/// </summary>
+public sealed class UndoableTextBox : TextBox, IUndoRedoField
+{
+    private const int MaxHistory = 100;
+
+    private readonly Stack<(string Text, int Caret)> _undoStack = new();
+    private readonly Stack<(string Text, int Caret)> _redoStack = new();
+    private string _lastText = string.Empty;
+    private int _lastCaret;
+    private bool _applyingHistory;
+
+    public UndoableTextBox()
+    {
+        // Suppress the native Windows context menu by assigning an empty strip
+        // and opening the themed menu cleanly on mouse-up.
+        ContextMenuStrip = new ContextMenuStrip();
+        MouseUp += (_, e) =>
+        {
+            if (e.Button == MouseButtons.Right)
+            {
+                Focus();
+                TextFieldContextMenu.Show(this, Cursor.Position);
+            }
+        };
+    }
+
+    public new bool CanUndo => _undoStack.Count > 0;
+
+    public bool CanRedo => _redoStack.Count > 0;
+
+    public new void Undo()
+    {
+        if (_undoStack.Count == 0)
+        {
+            return;
+        }
+        _redoStack.Push((Text, SelectionStart));
+        ApplySnapshot(_undoStack.Pop());
+    }
+
+    public void Redo()
+    {
+        if (_redoStack.Count == 0)
+        {
+            return;
+        }
+        _undoStack.Push((Text, SelectionStart));
+        ApplySnapshot(_redoStack.Pop());
+    }
+
+    public void ResetHistory(string initialText = "")
+    {
+        _undoStack.Clear();
+        _redoStack.Clear();
+        _applyingHistory = true;
+        try
+        {
+            Text = initialText;
+            _lastText = initialText;
+            _lastCaret = initialText.Length;
+        }
+        finally
+        {
+            _applyingHistory = false;
+        }
+    }
+
+    private void ApplySnapshot((string Text, int Caret) snapshot)
+    {
+        _applyingHistory = true;
+        try
+        {
+            Text = snapshot.Text;
+            SelectionStart = Math.Clamp(snapshot.Caret, 0, TextLength);
+            SelectionLength = 0;
+            _lastText = Text;
+            _lastCaret = SelectionStart;
+        }
+        finally
+        {
+            _applyingHistory = false;
+        }
+    }
+
+    protected override void OnTextChanged(EventArgs e)
+    {
+        if (!_applyingHistory && Text != _lastText)
+        {
+            _undoStack.Push((_lastText, _lastCaret));
+            if (_undoStack.Count > MaxHistory)
+            {
+                var kept = _undoStack.Take(MaxHistory).Reverse().ToArray();
+                _undoStack.Clear();
+                foreach (var entry in kept)
+                {
+                    _undoStack.Push(entry);
+                }
+            }
+            _redoStack.Clear();
+            _lastText = Text;
+            _lastCaret = SelectionStart;
+        }
+        base.OnTextChanged(e);
+    }
+
+    protected override bool ProcessCmdKey(ref Message m, Keys keyData)
+    {
+        if (keyData == (Keys.Control | Keys.Z))
+        {
+            Undo();
+            return true;
+        }
+        if (keyData == (Keys.Control | Keys.Y))
+        {
+            Redo();
+            return true;
+        }
+        return base.ProcessCmdKey(ref m, keyData);
+    }
 }

@@ -17,6 +17,7 @@ public static class Theme
         string SurfaceAlt,
         string Canvas,
         string PageShadow,
+        string PageBorder,
         string Text,
         string TextMuted,
         string Accent,
@@ -25,6 +26,9 @@ public static class Theme
         string BorderStrong,
         string Hover,
         string Pressed,
+        string DangerHover,
+        string DangerPressed,
+        string DangerText,
         string Selection,
         string ScrollThumb,
         string ScrollThumbHover,
@@ -38,7 +42,8 @@ public static class Theme
             Surface: "#111823",
             SurfaceAlt: "#18212E",
             Canvas: "#080B10",
-            PageShadow: "#1AFFFFFF",
+            PageShadow: "#2E000000",
+            PageBorder: "#2A3A4D",
             Text: "#EDF3FA",
             TextMuted: "#8A9AAD",
             Accent: "#2AA9B8",
@@ -47,6 +52,9 @@ public static class Theme
             BorderStrong: "#33465A",
             Hover: "#1B2634",
             Pressed: "#233243",
+            DangerHover: "#C42B1C",
+            DangerPressed: "#A22216",
+            DangerText: "#FFFFFF",
             Selection: "#332AA9B8",
             ScrollThumb: "#2C3B4C",
             ScrollThumbHover: "#3E536A",
@@ -58,7 +66,8 @@ public static class Theme
             Surface: "#1D1D20",
             SurfaceAlt: "#252529",
             Canvas: "#121214",
-            PageShadow: "#1AFFFFFF",
+            PageShadow: "#2E000000",
+            PageBorder: "#3A3A42",
             Text: "#ECECEF",
             TextMuted: "#9C9CA6",
             Accent: "#B4BBC4",
@@ -67,6 +76,9 @@ public static class Theme
             BorderStrong: "#42424A",
             Hover: "#27272C",
             Pressed: "#32323A",
+            DangerHover: "#C42B1C",
+            DangerPressed: "#A22216",
+            DangerText: "#FFFFFF",
             Selection: "#33B4BBC4",
             ScrollThumb: "#3A3A42",
             ScrollThumbHover: "#4E4E58",
@@ -79,6 +91,7 @@ public static class Theme
             SurfaceAlt: "#EFEBE4",
             Canvas: "#E8E4DC",
             PageShadow: "#28000000",
+            PageBorder: "#C6BFB4",
             Text: "#1C1A17",
             TextMuted: "#6B655D",
             Accent: "#1F6F7A",
@@ -87,6 +100,9 @@ public static class Theme
             BorderStrong: "#BFB7AA",
             Hover: "#EDE8E0",
             Pressed: "#E2DCD2",
+            DangerHover: "#C42B1C",
+            DangerPressed: "#A22216",
+            DangerText: "#FFFFFF",
             Selection: "#331F6F7A",
             ScrollThumb: "#C4BCB0",
             ScrollThumbHover: "#A9A093",
@@ -138,6 +154,12 @@ public static class Theme
 
     public static Color Pressed => FromHex(Current.Pressed);
 
+    public static Color DangerHover => FromHex(Current.DangerHover);
+
+    public static Color DangerPressed => FromHex(Current.DangerPressed);
+
+    public static Color DangerText => FromHex(Current.DangerText);
+
     public static Color Selection => FromHex(Current.Selection);
 
     public static Color ScrollThumb => FromHex(Current.ScrollThumb);
@@ -145,6 +167,8 @@ public static class Theme
     public static Color ScrollThumbHover => FromHex(Current.ScrollThumbHover);
 
     public static Color PageShadow => FromHex(Current.PageShadow);
+
+    public static Color PageBorder => FromHex(Current.PageBorder);
 
     /// <summary>Search hit highlight, drawn under the selection.</summary>
     public static Color SearchMatch => FromHex(Current.SearchMatch);

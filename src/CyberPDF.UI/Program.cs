@@ -37,7 +37,13 @@ internal static class Program
         var store = new SettingsStore();
         var settings = store.Load();
         Strings.Current = SettingsStore.ResolveLanguage(settings);
-        Theme.Apply(settings.Theme);
+        var themeArg = args.FirstOrDefault(a => a.StartsWith("--theme=", StringComparison.OrdinalIgnoreCase));
+        var activeTheme = settings.Theme;
+        if (themeArg is not null && Enum.TryParse<AppTheme>(themeArg.AsSpan("--theme=".Length), ignoreCase: true, out var parsedTheme))
+        {
+            activeTheme = parsedTheme;
+        }
+        Theme.Apply(activeTheme);
 
         var budget = (long)settings.RenderCacheBudgetMb * 1024 * 1024;
         using var engine = new PdfEngine(budget);
@@ -49,6 +55,11 @@ internal static class Program
         // before the message loop starts and the window appears over it.
         var diag = DiagnosticsProbe.IsRequested(args);
         var shotPath = ScreenshotProbe.OutputPath(args);
+        var selfTest = args.Any(a => a.Equals("--selftest", StringComparison.OrdinalIgnoreCase));
+        if (diag || shotPath is not null || selfTest)
+        {
+            window.SuppressPersistenceOnClose();
+        }
         var initial = diag
             ? DiagnosticsProbe.TargetFile(args)
             : shotPath is not null

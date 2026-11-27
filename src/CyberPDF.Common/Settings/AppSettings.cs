@@ -61,6 +61,16 @@ public sealed class AppSettings
     public const int MinSidePanelWidth = 140;
 
     public const int MaxSidePanelWidth = 480;
+
+    public int? WindowX { get; set; }
+
+    public int? WindowY { get; set; }
+
+    public int? WindowWidth { get; set; }
+
+    public int? WindowHeight { get; set; }
+
+    public bool WindowMaximized { get; set; }
 }
 
 /// <summary>Last position inside a document, restored when it is reopened.</summary>

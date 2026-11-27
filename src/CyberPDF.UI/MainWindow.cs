@@ -1,9 +1,11 @@
 using System.Diagnostics;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using CyberPDF.Common.I18n;
 using CyberPDF.Common.Settings;
 using CyberPDF.Core.Documents;
 using CyberPDF.Core.Rendering;
+using CyberPDF.Core.Search;
 using CyberPDF.UI.Controls;
 using CyberPDF.UI.Services;
 using CyberPDF.UI.Theming;
@@ -25,6 +27,7 @@ public sealed class MainWindow : Form
     private readonly SettingsStore _store;
 
     private readonly Panel _titleBar = new();
+    private readonly Panel _titleIconBox = new();
     private readonly Panel _toolbar = new();
     private readonly Panel _statusBar = new();
     private readonly PageViewer _viewer;
@@ -43,7 +46,10 @@ public sealed class MainWindow : Form
     private readonly ToolButton _copyButton = new();
     private readonly ToolButton _searchButton = new();
     private readonly Panel _searchBar = new();
-    private readonly TextBox _searchField = new();
+    private readonly Panel _searchBoxHost = new();
+    private readonly UndoableTextBox _searchField = new();
+    private readonly ToolButton _matchCaseButton = new();
+    private readonly ToolButton _wholeWordButton = new();
     private readonly Label _searchResults = new();
     private readonly ToolButton _searchPreviousButton = new();
     private readonly ToolButton _searchNextButton = new();
@@ -53,15 +59,19 @@ public sealed class MainWindow : Form
     private readonly ToolButton _closeButton = new();
     private readonly ToolButton _sidePanelButton = new();
     private readonly SidePanel _sidePanel;
+    private readonly Image? _appIconBitmap;
+    private ResizeBorderFilter? _resizeFilter;
     private ThemedToolTip? _toolTip;
 
     private PdfDocument? _document;
     private bool _diagRequested;
     private bool _stressRequested;
+    private bool _suppressPersistenceOnClose;
     private string? _documentPath;
     private float _zoom = 1f;
     private int _rotation;
     private bool _updatingScrollBar;
+    private bool _fitPageActive;
 
     public MainWindow(PdfEngine engine, AppSettings settings, SettingsStore store)
     {
@@ -70,6 +80,12 @@ public sealed class MainWindow : Form
         _store = store;
         _viewer = new PageViewer(engine);
         _sidePanel = new SidePanel(engine);
+
+        LoadEmbeddedIcons(out var windowIcon, out _appIconBitmap);
+        if (windowIcon is not null)
+        {
+            Icon = windowIcon;
+        }
 
         SuspendLayout();
 
@@ -84,6 +100,7 @@ public sealed class MainWindow : Form
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(560, 420);
+        Padding = new Padding(1);
 
         Size = new Size(1100, 820);
         BackColor = Theme.Bg;
@@ -116,10 +133,29 @@ public sealed class MainWindow : Form
         _titleBar.Height = TitleBarHeight;
         _titleBar.BackColor = Theme.Bg;
 
+        _titleIconBox.Dock = DockStyle.Left;
+        _titleIconBox.Width = 28;
+        _titleIconBox.BackColor = Color.Transparent;
+        _titleIconBox.Paint += (_, e) =>
+        {
+            if (_appIconBitmap is null)
+            {
+                return;
+            }
+            var scale = DeviceDpi / 96f;
+            var iconSize = Math.Max(14, (int)Math.Round(16 * scale));
+            var x = Math.Max(4, (int)Math.Round(10 * scale));
+            var y = (_titleIconBox.Height - iconSize) / 2;
+            ThemePainter.PrepareHighQuality(e.Graphics);
+            e.Graphics.DrawImage(_appIconBitmap, new Rectangle(x, y, iconSize, iconSize));
+        };
+        _titleIconBox.MouseDown += TitleBarMouseDown;
+        _titleIconBox.MouseDoubleClick += (_, _) => ToggleMaximize();
+
         _titleLabel.AutoSize = false;
         _titleLabel.Dock = DockStyle.Fill;
         _titleLabel.TextAlign = ContentAlignment.MiddleLeft;
-        _titleLabel.Padding = new Padding(12, 0, 0, 0);
+        _titleLabel.Padding = new Padding(4, 0, 0, 0);
         _titleLabel.ForeColor = Theme.Text;
         _searchBar.BackColor = Theme.Surface;
         _sidePanel.BackColor = Theme.Surface;
@@ -139,8 +175,10 @@ public sealed class MainWindow : Form
             () => WindowState = FormWindowState.Minimized);
         ConfigureWindowButton(_maximizeButton, IconKind.Maximize, Strings.Get("Maximize"), ToggleMaximize);
         ConfigureWindowButton(_closeButton, IconKind.Close, Strings.Get("CloseWindow"), Close);
+        _closeButton.IsDanger = true;
 
         _titleBar.Controls.Add(_titleLabel);
+        _titleBar.Controls.Add(_titleIconBox);
 
         // Right-docked, the control added last sits closest to the edge, so the
         // close button goes in last to keep the suite's minimize/maximize/close.
@@ -156,6 +194,8 @@ public sealed class MainWindow : Form
         button.Dock = DockStyle.Right;
         button.Width = 46;
         button.Height = TitleBarHeight;
+        button.IsWindowChrome = true;
+        button.CornerRadius = 0;
         button.AccessibleName = accessibleName;
         button.Click += (_, _) => onClick();
     }
@@ -233,7 +273,7 @@ public sealed class MainWindow : Form
     private void BuildSearchBar()
     {
         _searchBar.Dock = DockStyle.Top;
-        _searchBar.Height = 40;
+        _searchBar.Height = 42;
         _searchBar.BackColor = Theme.Surface;
         _searchBar.Visible = false;
         _searchBar.Paint += (_, e) =>
@@ -242,31 +282,55 @@ public sealed class MainWindow : Form
             e.Graphics.DrawLine(pen, 0, _searchBar.Height - 1, _searchBar.Width, _searchBar.Height - 1);
         };
 
-        // A real TextBox: it gives caret, selection and the suite's own context
-        // menu for editable fields without reimplementing any of it.
-        _searchField.BorderStyle = BorderStyle.FixedSingle;
+        // Rounded themed container around a borderless UndoableTextBox so the
+        // search box matches the palette and inherits Undo/Redo + right-click menu.
+        _searchBoxHost.Size = new Size(256, 30);
+        _searchBoxHost.BackColor = Theme.Surface;
+        _searchBoxHost.Margin = new Padding(0, 1, 4, 1);
+        _searchBoxHost.Paint += (_, e) =>
+        {
+            var g = e.Graphics;
+            ThemePainter.PrepareHighQuality(g);
+            var rect = new Rectangle(0, 0, _searchBoxHost.Width - 1, _searchBoxHost.Height - 1);
+            ThemePainter.FillRounded(g, rect, 6, Theme.Canvas);
+            ThemePainter.DrawRounded(g, rect, 6, _searchField.Focused ? Theme.Accent : Theme.Border);
+        };
+
+        _searchField.BorderStyle = BorderStyle.None;
         _searchField.BackColor = Theme.Canvas;
         _searchField.ForeColor = Theme.Text;
-        _searchField.Width = 260;
+        _searchField.Dock = DockStyle.Fill;
         _searchField.PlaceholderText = Strings.Get("SearchPlaceholder");
         _searchField.TextChanged += (_, _) => RunSearch();
         _searchField.KeyDown += OnSearchFieldKeyDown;
-        _searchField.MouseUp += (_, e) =>
+        _searchField.GotFocus += (_, _) => _searchBoxHost.Invalidate();
+        _searchField.LostFocus += (_, _) => _searchBoxHost.Invalidate();
+        _searchBoxHost.Padding = new Padding(9, 6, 9, 5);
+        _searchBoxHost.Controls.Add(_searchField);
+
+        ConfigureButton(_matchCaseButton, IconKind.None, "Aa", () =>
         {
-            if (e.Button == MouseButtons.Right)
-            {
-                TextFieldContextMenu.Show(_searchField, Cursor.Position);
-            }
-        };
+            _matchCaseButton.IsActive = !_matchCaseButton.IsActive;
+            RunSearch();
+        });
+        _matchCaseButton.AccessibleName = Strings.Get("MatchCase");
+
+        ConfigureButton(_wholeWordButton, IconKind.None, "ab", () =>
+        {
+            _wholeWordButton.IsActive = !_wholeWordButton.IsActive;
+            RunSearch();
+        });
+        _wholeWordButton.AccessibleName = Strings.Get("WholeWord");
 
         _searchResults.AutoSize = false;
-        _searchResults.Width = 110;
+        _searchResults.Width = 104;
+        _searchResults.Height = 30;
         _searchResults.TextAlign = ContentAlignment.MiddleLeft;
         _searchResults.ForeColor = Theme.TextMuted;
         _searchResults.BackColor = Color.Transparent;
 
-        ConfigureButton(_searchPreviousButton, IconKind.PreviousPage, null, () => _viewer.GoToPreviousMatch());
-        ConfigureButton(_searchNextButton, IconKind.NextPage, null, () => _viewer.GoToNextMatch());
+        ConfigureButton(_searchPreviousButton, IconKind.ChevronUp, null, () => _viewer.GoToPreviousMatch());
+        ConfigureButton(_searchNextButton, IconKind.ChevronDown, null, () => _viewer.GoToNextMatch());
         ConfigureButton(_searchCloseButton, IconKind.Close, null, CloseSearch);
         _searchCloseButton.AccessibleName = Strings.Get("SearchClear");
 
@@ -275,10 +339,12 @@ public sealed class MainWindow : Form
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false,
-            Padding = new Padding(10, 4, 10, 4),
+            Padding = new Padding(10, 5, 10, 5),
             BackColor = Color.Transparent,
         };
-        layout.Controls.Add(_searchField);
+        layout.Controls.Add(_searchBoxHost);
+        layout.Controls.Add(_matchCaseButton);
+        layout.Controls.Add(_wholeWordButton);
         layout.Controls.Add(_searchResults);
         layout.Controls.Add(_searchPreviousButton);
         layout.Controls.Add(_searchNextButton);
@@ -816,6 +882,8 @@ public sealed class MainWindow : Form
         _toolTip.Attach(_searchPreviousButton, () => Strings.Get("SearchPrevious"), () => "Shift+F3");
         _toolTip.Attach(_searchNextButton, () => Strings.Get("SearchNext"), () => "F3");
         _toolTip.Attach(_searchCloseButton, () => Strings.Get("SearchClear"), () => "Esc");
+        _toolTip.Attach(_matchCaseButton, () => Strings.Get("MatchCase"), null);
+        _toolTip.Attach(_wholeWordButton, () => Strings.Get("WholeWord"), null);
     }
 
     private void WireEvents()
@@ -1120,6 +1188,7 @@ public sealed class MainWindow : Form
         }
 
         _searchBar.Visible = true;
+        _searchButton.IsActive = true;
         _searchField.Focus();
         _searchField.SelectAll();
         RescaleChrome();
@@ -1149,6 +1218,7 @@ public sealed class MainWindow : Form
         }
 
         _sidePanel.Visible = visible;
+        _sidePanelButton.IsActive = visible;
         if (visible)
         {
             _sidePanel.SetDocument(_document);
@@ -1224,6 +1294,7 @@ public sealed class MainWindow : Form
     private void CloseSearch()
     {
         _searchBar.Visible = false;
+        _searchButton.IsActive = false;
         _viewer.ClearSearch();
         _searchResults.Text = string.Empty;
         _viewer.Focus();
@@ -1236,7 +1307,11 @@ public sealed class MainWindow : Form
     /// </summary>
     private void RunSearch()
     {
-        _viewer.Search(_searchField.Text);
+        _viewer.Search(_searchField.Text, new SearchOptions
+        {
+            MatchCase = _matchCaseButton.IsActive,
+            WholeWord = _wholeWordButton.IsActive,
+        });
     }
 
     private void OnSearchFieldKeyDown(object? sender, KeyEventArgs e)
@@ -1330,8 +1405,8 @@ public sealed class MainWindow : Form
         }
 
         var menu = ThemedContextMenu.Create(
-            new ContextMenuItem(Strings.Get("Copy"), CopySelection, IconKind.None, _viewer.HasSelection),
-            new ContextMenuItem(Strings.Get("SelectAll"), () => _viewer.SelectAllOnCurrentPage(), IconKind.None, true));
+            new ContextMenuItem(Strings.Get("Copy"), CopySelection, IconKind.Copy, _viewer.HasSelection),
+            new ContextMenuItem(Strings.Get("SelectAll"), () => _viewer.SelectAllOnCurrentPage(), IconKind.SelectAll, true));
         menu.Show(screenLocation);
     }
 
@@ -1346,6 +1421,7 @@ public sealed class MainWindow : Form
     private void ChangeZoom(float factor)
     {
         _userZoomed = true;
+        _fitPageActive = false;
         ApplyZoom(_viewer.Zoom * factor);
     }
 
@@ -1358,6 +1434,7 @@ public sealed class MainWindow : Form
         _zoom = Math.Clamp(zoom, 0.1f, 8f);
         _viewer.SetZoom(_zoom);
         SyncScrollBar();
+        UpdateZoomIndicators();
         UpdateStatus();
         SaveViewState();
     }
@@ -1368,7 +1445,9 @@ public sealed class MainWindow : Form
         {
             return;
         }
-        ApplyZoom(FitWidthZoomFor(_viewer.FirstVisiblePage));
+        _fitPageActive = false;
+        _userZoomed = false;
+        ApplyZoom(FitWidthZoomFor(_viewer.FirstVisiblePage), userInitiated: false);
     }
 
     /// <summary>
@@ -1422,8 +1501,16 @@ public sealed class MainWindow : Form
         // A rotation swaps the page's visual axes, so the computed zoom is for
         // the rotated page: GetPageSize already reports the rotated size, and
         // ApplyZoom rebuilds the layout, which is enough.
+        _fitPageActive = true;
         ApplyZoom(zoom);
         _viewer.ScrollToPage(page);
+    }
+
+    private void UpdateZoomIndicators()
+    {
+        var hasDoc = _document is not null;
+        _fitWidthButton.IsActive = hasDoc && !_userZoomed && !_fitPageActive;
+        _fitPageButton.IsActive = hasDoc && _fitPageActive;
     }
 
     private void Rotate(int degrees)
@@ -1469,7 +1556,17 @@ public sealed class MainWindow : Form
             AppTheme.Light => IconKind.ThemeLight,
             _ => IconKind.ThemeDefault,
         };
-        _themeButton.AccessibleName = Strings.Get("Settings");
+        _themeButton.AccessibleName = Strings.Get("ChangeTheme");
+        _sidePanel.BackColor = Theme.Surface;
+        _sidePanel.Invalidate(true);
+        _searchBoxHost.BackColor = Theme.Surface;
+        _searchBoxHost.Invalidate();
+        _matchCaseButton.Invalidate();
+        _wholeWordButton.Invalidate();
+        _searchPreviousButton.Invalidate();
+        _searchNextButton.Invalidate();
+        _searchCloseButton.Invalidate();
+        _titleIconBox.Invalidate();
 
         foreach (Control control in _toolbar.Controls)
         {
@@ -1492,6 +1589,8 @@ public sealed class MainWindow : Form
         _titleBar.Invalidate();
         _toolbar.Invalidate();
         _statusBar.Invalidate();
+        _searchBar.Invalidate();
+        Invalidate();
     }
 
     // --- Status -------------------------------------------------------------
@@ -1533,10 +1632,13 @@ public sealed class MainWindow : Form
         {
             _sidePanel.Visible = false;
         }
+        _sidePanelButton.IsActive = hasDocument && _sidePanel.Visible;
         if (!hasDocument && _searchBar.Visible)
         {
             CloseSearch();
         }
+        _searchButton.IsActive = hasDocument && _searchBar.Visible;
+        UpdateZoomIndicators();
     }
 
     // --- Persistence --------------------------------------------------------
@@ -1680,6 +1782,17 @@ public sealed class MainWindow : Form
 
     private void OnWindowKeyDown(object? sender, KeyEventArgs e)
     {
+        if (ActiveControl is TextBoxBase)
+        {
+            var isTextEditingKey =
+                (e.Control && e.KeyCode is Keys.C or Keys.A or Keys.X or Keys.V or Keys.Z or Keys.Y)
+                || e.KeyCode is Keys.Home or Keys.End or Keys.Up or Keys.Down or Keys.Left or Keys.Right;
+            if (isTextEditingKey)
+            {
+                return;
+            }
+        }
+
         switch (e.KeyCode)
         {
             case Keys.O when e.Control:
@@ -1762,17 +1875,29 @@ public sealed class MainWindow : Form
     protected override void OnResize(EventArgs e)
     {
         base.OnResize(e);
+        Padding = WindowState == FormWindowState.Maximized ? Padding.Empty : new Padding(1);
         if (_maximizeButton.Icon != IconKind.None)
         {
             _maximizeButton.Icon = WindowState == FormWindowState.Maximized ? IconKind.Restore : IconKind.Maximize;
         }
         // Keep the page fitted to the window while the user has not chosen a zoom
         // level explicitly, which is what every reader does on resize.
-        if (!_userZoomed && _document is not null && WindowState != FormWindowState.Minimized)
+        if (!_userZoomed && !_fitPageActive && _document is not null && WindowState != FormWindowState.Minimized)
         {
             FitWidthOnOpen();
             SyncScrollBar();
             UpdateStatus();
+        }
+        Invalidate();
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+        if (WindowState != FormWindowState.Maximized && ClientSize.Width > 1 && ClientSize.Height > 1)
+        {
+            using var border = new Pen(Theme.Border);
+            e.Graphics.DrawRectangle(border, 0, 0, ClientSize.Width - 1, ClientSize.Height - 1);
         }
     }
 
@@ -1781,6 +1906,22 @@ public sealed class MainWindow : Form
         base.OnLoad(e);
 
         RescaleChrome();
+
+        if (_resizeFilter is null)
+        {
+            _resizeFilter = new ResizeBorderFilter(this);
+            Application.AddMessageFilter(_resizeFilter);
+        }
+
+        if (TryGetValidStoredBounds(out var storedBounds))
+        {
+            Bounds = storedBounds;
+            if (_settings.WindowMaximized)
+            {
+                WindowState = FormWindowState.Maximized;
+            }
+            return;
+        }
 
         // WinForms has already applied DPI scaling here, so this is the one place
         // where setting a size in device pixels sticks. The design size is capped
@@ -1799,6 +1940,29 @@ public sealed class MainWindow : Form
             height);
     }
 
+    private bool TryGetValidStoredBounds(out Rectangle bounds)
+    {
+        bounds = Rectangle.Empty;
+        if (_settings.WindowX is not int x
+            || _settings.WindowY is not int y
+            || _settings.WindowWidth is not int width
+            || _settings.WindowHeight is not int height)
+        {
+            return false;
+        }
+        if (width < 560 || height < 420 || width > 7680 || height > 4320)
+        {
+            return false;
+        }
+        var candidate = new Rectangle(x, y, width, height);
+        if (!Screen.AllScreens.Any(s => s.WorkingArea.IntersectsWith(candidate)))
+        {
+            return false;
+        }
+        bounds = candidate;
+        return true;
+    }
+
     protected override void OnShown(EventArgs e)
     {
         base.OnShown(e);
@@ -1815,11 +1979,23 @@ public sealed class MainWindow : Form
         var scale = DeviceDpi / 96f;
         _scrollBar.Width = Math.Max(8, (int)Math.Round(10 * scale));
         _titleBar.Height = (int)Math.Round(TitleBarHeight * scale);
+        _titleIconBox.Width = (int)Math.Round(28 * scale);
         _toolbar.Height = (int)Math.Round(ToolbarHeight * scale);
         _statusBar.Height = (int)Math.Round(StatusBarHeight * scale);
-        _searchBar.Height = (int)Math.Round(40 * scale);
-        _searchField.Width = (int)Math.Round(260 * scale);
-        _searchResults.Width = (int)Math.Round(110 * scale);
+        _searchBar.Height = (int)Math.Round(42 * scale);
+        _searchBoxHost.Size = new Size((int)Math.Round(256 * scale), (int)Math.Round(30 * scale));
+        _searchBoxHost.Padding = new Padding(
+            (int)Math.Round(9 * scale),
+            (int)Math.Round(6 * scale),
+            (int)Math.Round(9 * scale),
+            (int)Math.Round(5 * scale));
+        _searchResults.Width = (int)Math.Round(104 * scale);
+        _searchResults.Height = (int)Math.Round(30 * scale);
+        _matchCaseButton.Size = _matchCaseButton.MeasurePreferredSize(scale);
+        _wholeWordButton.Size = _wholeWordButton.MeasurePreferredSize(scale);
+        _searchPreviousButton.Size = new Size((int)Math.Round(30 * scale), (int)Math.Round(30 * scale));
+        _searchNextButton.Size = new Size((int)Math.Round(30 * scale), (int)Math.Round(30 * scale));
+        _searchCloseButton.Size = new Size((int)Math.Round(30 * scale), (int)Math.Round(30 * scale));
         _pageLabel.Width = (int)Math.Round(260 * scale);
 
         var titleHeight = (int)Math.Round(TitleBarHeight * scale);
@@ -1917,20 +2093,141 @@ public sealed class MainWindow : Form
         _singleInstance = singleInstance;
     }
 
+    internal void SuppressPersistenceOnClose() => _suppressPersistenceOnClose = true;
+
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
-        SaveViewState();
+        if (!_suppressPersistenceOnClose)
+        {
+            SaveViewState();
+            PersistWindowBounds();
+        }
         _toolTip?.Dispose();
+        if (_resizeFilter is not null)
+        {
+            Application.RemoveMessageFilter(_resizeFilter);
+            _resizeFilter = null;
+        }
+        _appIconBitmap?.Dispose();
         base.OnFormClosing(e);
     }
 
     /// <summary>Writes the window size and location for the next session.</summary>
     public void PersistWindowBounds()
     {
-        if (WindowState == FormWindowState.Normal)
+        _settings.WindowMaximized = WindowState == FormWindowState.Maximized;
+        var rect = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
+        if (rect.Width >= 560 && rect.Height >= 420)
         {
-            _settings.ViewStates["__window"] = new DocumentViewState();
+            _settings.WindowX = rect.X;
+            _settings.WindowY = rect.Y;
+            _settings.WindowWidth = rect.Width;
+            _settings.WindowHeight = rect.Height;
         }
         _store.Save(_settings);
+    }
+
+    private static void LoadEmbeddedIcons(out Icon? windowIcon, out Image? titleBitmap)
+    {
+        windowIcon = null;
+        titleBitmap = null;
+        var assembly = Assembly.GetExecutingAssembly();
+        var names = assembly.GetManifestResourceNames();
+
+        var icoName = names.FirstOrDefault(n => n.EndsWith("CyberPDF.ico", StringComparison.OrdinalIgnoreCase));
+        if (icoName is not null)
+        {
+            using var stream = assembly.GetManifestResourceStream(icoName);
+            if (stream is not null)
+            {
+                windowIcon = new Icon(stream);
+            }
+        }
+
+        var pngName = names.FirstOrDefault(n => n.EndsWith("CyberPDF.png", StringComparison.OrdinalIgnoreCase));
+        if (pngName is not null)
+        {
+            using var stream = assembly.GetManifestResourceStream(pngName);
+            if (stream is not null)
+            {
+                titleBitmap = Image.FromStream(stream);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Enables 8-edge native Windows resize on a borderless form without
+    /// breaking DrawToBitmap or child hit-testing.
+    /// </summary>
+    private sealed class ResizeBorderFilter : IMessageFilter
+    {
+        private const int WmMouseMove = 0x0200;
+        private const int WmLButtonDown = 0x0201;
+
+        private readonly MainWindow _form;
+
+        public ResizeBorderFilter(MainWindow form) => _form = form;
+
+        public bool PreFilterMessage(ref Message m)
+        {
+            if (m.Msg is not (WmMouseMove or WmLButtonDown))
+            {
+                return false;
+            }
+            if (_form.IsDisposed || !_form.Visible || _form.WindowState != FormWindowState.Normal)
+            {
+                return false;
+            }
+            if (Control.FromHandle(m.HWnd)?.FindForm() != _form)
+            {
+                return false;
+            }
+
+            var pt = _form.PointToClient(Cursor.Position);
+            var hit = HitTestBorder(pt);
+            if (hit == 0)
+            {
+                return false;
+            }
+
+            if (m.Msg == WmMouseMove)
+            {
+                Cursor.Current = hit switch
+                {
+                    10 or 11 => Cursors.SizeWE,
+                    12 or 15 => Cursors.SizeNS,
+                    13 or 17 => Cursors.SizeNWSE,
+                    14 or 16 => Cursors.SizeNESW,
+                    _ => Cursors.Default,
+                };
+                return false;
+            }
+
+            ReleaseCapture();
+            SendMessage(_form.Handle, WmNcLeftButtonDown, (IntPtr)hit, IntPtr.Zero);
+            return true;
+        }
+
+        private int HitTestBorder(Point pt)
+        {
+            var w = _form.ClientSize.Width;
+            var h = _form.ClientSize.Height;
+            var grip = Math.Max(4, (int)Math.Round(5 * _form.DeviceDpi / 96f));
+
+            var left = pt.X >= 0 && pt.X < grip;
+            var right = pt.X <= w && pt.X >= w - grip;
+            var top = pt.Y >= 0 && pt.Y < grip;
+            var bottom = pt.Y <= h && pt.Y >= h - grip;
+
+            if (top && left) return 13;     // HTTOPLEFT
+            if (top && right) return 14;    // HTTOPRIGHT
+            if (bottom && left) return 16;  // HTBOTTOMLEFT
+            if (bottom && right) return 17; // HTBOTTOMRIGHT
+            if (left) return 10;            // HTLEFT
+            if (right) return 11;           // HTRIGHT
+            if (top) return 12;             // HTTOP
+            if (bottom) return 15;          // HTBOTTOM
+            return 0;
+        }
     }
 }

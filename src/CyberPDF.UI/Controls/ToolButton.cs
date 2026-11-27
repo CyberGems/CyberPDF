@@ -1,4 +1,3 @@
-using System.Drawing.Drawing2D;
 using CyberPDF.UI.Theming;
 
 namespace CyberPDF.UI.Controls;
@@ -11,8 +10,15 @@ namespace CyberPDF.UI.Controls;
 /// </summary>
 public sealed class ToolButton : Control
 {
+    private const TextFormatFlags CaptionMeasureFlags =
+        TextFormatFlags.NoPadding | TextFormatFlags.SingleLine;
+
+    private const TextFormatFlags CaptionDrawFlags =
+        TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine;
+
     private bool _hovered;
     private bool _pressed;
+    private bool _isActive;
 
     public ToolButton()
     {
@@ -31,23 +37,38 @@ public sealed class ToolButton : Control
     public IconKind Icon { get; set; } = IconKind.None;
 
     /// <summary>Optional caption. Empty for icon-only buttons.</summary>
-    // Control.Text is annotated [AllowNull]: it accepts null and returns empty.
-    // The override has to repeat the annotation or the compiler reports a
-    // nullability mismatch that callers would have to work around.
     [System.Diagnostics.CodeAnalysis.AllowNull]
     public override string Text
     {
         get => base.Text;
         set
         {
-            // Matches Control.Text, which is non-nullable. An icon-only button
-            // leaves this empty instead of passing null.
             base.Text = value ?? string.Empty;
             Invalidate();
         }
     }
 
     public bool ShowBorder { get; set; }
+
+    public bool IsActive
+    {
+        get => _isActive;
+        set
+        {
+            if (_isActive == value)
+            {
+                return;
+            }
+            _isActive = value;
+            Invalidate();
+        }
+    }
+
+    public bool IsDanger { get; set; }
+
+    public bool IsWindowChrome { get; set; }
+
+    public int CornerRadius { get; set; } = 6;
 
     protected override void OnMouseEnter(EventArgs e)
     {
@@ -69,7 +90,6 @@ public sealed class ToolButton : Control
         if (e.Button == MouseButtons.Left)
         {
             _pressed = true;
-            Focus();
             Invalidate();
         }
         base.OnMouseDown(e);
@@ -102,57 +122,78 @@ public sealed class ToolButton : Control
             return;
         }
 
-        var fill = !Enabled
-            ? Color.Transparent
-            : _pressed ? Theme.Pressed : _hovered ? Theme.Hover : Color.Transparent;
+        Color fill;
+        if (!Enabled)
+        {
+            fill = Color.Transparent;
+        }
+        else if (IsDanger)
+        {
+            fill = _pressed ? Theme.DangerPressed : _hovered ? Theme.DangerHover : Color.Transparent;
+        }
+        else
+        {
+            fill = _pressed
+                ? Theme.Pressed
+                : _hovered
+                    ? Theme.Hover
+                    : _isActive ? Theme.Selection : Color.Transparent;
+        }
 
-        var radius = 6;
         if (fill != Color.Transparent)
         {
-            ThemePainter.FillRounded(g, bounds, radius, fill);
+            ThemePainter.FillRounded(g, bounds, CornerRadius, fill);
+        }
+        if (_isActive && Enabled && !IsWindowChrome)
+        {
+            var barWidth = Math.Max(8, bounds.Width - 12);
+            using var accentBrush = new SolidBrush(Theme.Accent);
+            g.FillRectangle(accentBrush, (bounds.Width - barWidth) / 2, bounds.Bottom - 2, barWidth, 2);
         }
         if (ShowBorder)
         {
-            ThemePainter.DrawRounded(g, Rectangle.Inflate(bounds, -1, -1), radius, Theme.Border);
+            ThemePainter.DrawRounded(g, Rectangle.Inflate(bounds, -1, -1), CornerRadius, Theme.Border);
         }
-        if (Focused && Enabled)
+        if (Focused && ShowFocusCues && Enabled)
         {
-            ThemePainter.DrawRounded(g, Rectangle.Inflate(bounds, -1, -1), radius, Theme.Accent);
+            ThemePainter.DrawRounded(g, Rectangle.Inflate(bounds, -1, -1), CornerRadius, Theme.Accent);
         }
 
-        var ink = !Enabled ? Theme.TextMuted : Theme.Text;
+        var ink = !Enabled
+            ? Theme.TextMuted
+            : IsDanger && (_hovered || _pressed)
+                ? Theme.DangerText
+                : Theme.Text;
+
         var hasText = !string.IsNullOrEmpty(Text);
         var scale = DeviceDpi / 96f;
         if (scale <= 0)
         {
             scale = 1f;
         }
-        var iconSize = Math.Max(12, (int)Math.Round((hasText ? 16 : 18) * scale));
-        var stroke = Math.Max(1.2f, 1.6f * scale);
+
+        var iconSize = Math.Max(12, (int)Math.Round((IsWindowChrome ? 13 : hasText ? 15 : 17) * scale));
+        // Stroke stays in the normalized 16x16 icon grid; ScaleTransform already
+        // multiplies it by the DPI-scaled icon size.
+        var stroke = IsWindowChrome ? 1.25f : 1.45f;
 
         if (Icon != IconKind.None)
         {
             if (hasText)
             {
-                var textWidth = ThemePainter.MeasureTextWidth(g, Text, Font);
-                var gap = (int)Math.Round(7 * scale);
-                var totalWidth = iconSize + gap + textWidth;
-                var startX = (bounds.Width - totalWidth) / 2;
+                var textSize = TextRenderer.MeasureText(g, Text, Font, new Size(int.MaxValue, int.MaxValue), CaptionMeasureFlags);
+                var gap = (int)Math.Round(6 * scale);
+                var totalWidth = iconSize + gap + textSize.Width;
+                var startX = Math.Max((int)Math.Round(8 * scale), (bounds.Width - totalWidth) / 2);
                 var iconRect = new Rectangle(startX, (bounds.Height - iconSize) / 2, iconSize, iconSize);
                 Icons.Draw(g, Icon, iconRect, ink, stroke);
+
                 var textRect = new Rectangle(
                     startX + iconSize + gap,
                     0,
-                    textWidth + 4,
+                    Math.Max(1, bounds.Width - (startX + iconSize + gap) - (int)Math.Round(6 * scale)),
                     bounds.Height);
-                using var brush = new SolidBrush(ink);
-                using var format = new StringFormat
-                {
-                    LineAlignment = StringAlignment.Center,
-                    Alignment = StringAlignment.Near,
-                    FormatFlags = StringFormatFlags.NoWrap,
-                };
-                g.DrawString(Text, Font, brush, textRect, format);
+                TextRenderer.DrawText(g, Text, Font, textRect, ink, CaptionDrawFlags);
             }
             else
             {
@@ -166,7 +207,14 @@ public sealed class ToolButton : Control
         }
         else if (hasText)
         {
-            ThemePainter.DrawCenteredText(g, Text, Font, ink, bounds);
+            var textRect = Rectangle.Inflate(bounds, -(int)Math.Round(6 * scale), 0);
+            TextRenderer.DrawText(
+                g,
+                Text,
+                Font,
+                textRect,
+                ink,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
         }
     }
 
@@ -182,9 +230,6 @@ public sealed class ToolButton : Control
 
     /// <summary>
     /// Preferred size for the current icon, caption and font, in device pixels.
-    /// The scale is passed explicitly because a control measures against its own
-    /// DPI before it is parented, which would size a localized caption for the
-    /// wrong monitor.
     /// </summary>
     public Size MeasurePreferredSize(float scale = 1f)
     {
@@ -199,9 +244,11 @@ public sealed class ToolButton : Control
             return new Size((int)Math.Round(34 * scale), (int)Math.Round(32 * scale));
         }
 
-        using var g = CreateGraphics();
-        var textWidth = ThemePainter.MeasureTextWidth(g, Text, Font);
-        var width = textWidth + (int)Math.Round((16 + 7 + 18) * scale) + (int)Math.Round(12 * scale);
-        return new Size(width, (int)Math.Round(32 * scale));
+        var textSize = TextRenderer.MeasureText(Text, Font, new Size(int.MaxValue, int.MaxValue), CaptionMeasureFlags);
+        var padX = (int)Math.Round(10 * scale) * 2;
+        var iconAndGap = Icon == IconKind.None
+            ? 0
+            : (int)Math.Round(15 * scale) + (int)Math.Round(6 * scale);
+        return new Size(textSize.Width + iconAndGap + padX, (int)Math.Round(32 * scale));
     }
 }

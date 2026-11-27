@@ -21,6 +21,11 @@
     <ProjectReference Include="..\CyberPDF.Core\CyberPDF.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\CyberPDF.ico" />
+    <EmbeddedResource Include="Assets\CyberPDF.png" />
+  </ItemGroup>
+
   <!-- The native engine is copied beside the executable for development runs so
        the app can start straight from bin/. Published builds pick it up from
        the same relative location. -->
