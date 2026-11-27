@@ -158,7 +158,7 @@ public sealed class MainWindow : Form
         _titleBar.BackColor = Theme.Bg;
 
         _titleIconBox.Dock = DockStyle.Left;
-        _titleIconBox.Width = 28;
+        _titleIconBox.Width = 30;
         _titleIconBox.BackColor = Color.Transparent;
         _titleIconBox.Paint += (_, e) =>
         {
@@ -167,10 +167,12 @@ public sealed class MainWindow : Form
                 return;
             }
             var scale = DeviceDpi / 96f;
-            var iconSize = Math.Max(14, (int)Math.Round(16 * scale));
+            var iconSize = Math.Max(16, (int)Math.Round(18 * scale));
             var x = Math.Max(4, (int)Math.Round(10 * scale));
             var y = (_titleIconBox.Height - iconSize) / 2;
             ThemePainter.PrepareHighQuality(e.Graphics);
+            e.Graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+            e.Graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
             e.Graphics.DrawImage(_appIconBitmap, new Rectangle(x, y, iconSize, iconSize));
         };
         _titleIconBox.MouseDown += TitleBarMouseDown;
@@ -3093,7 +3095,7 @@ public sealed class MainWindow : Form
         _scrollBar.Width = Math.Max(8, (int)Math.Round(10 * scale));
         _hScrollBar.Height = Math.Max(8, (int)Math.Round(10 * scale));
         _titleBar.Height = (int)Math.Round(TitleBarHeight * scale);
-        _titleIconBox.Width = (int)Math.Round(28 * scale);
+        _titleIconBox.Width = (int)Math.Round(30 * scale);
         _tabStrip.Height = (int)Math.Round(32 * scale);
         _toolbar.Height = (int)Math.Round(ToolbarHeight * scale);
         _settingsButton.Width = (int)Math.Round(42 * scale);
