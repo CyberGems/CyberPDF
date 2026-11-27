@@ -30,7 +30,8 @@ public sealed class MainWindow : Form
     private DocumentAnnotations _currentAnnotations = new();
 
     private readonly Panel _titleBar = new();
-    private readonly Panel _titleIconBox = new();
+    private readonly Panel _brandButton = new();
+    private bool _brandHovered;
     private readonly TabStrip _tabStrip = new();
     private readonly Panel _toolbar = new();
     private readonly Panel _statusBar = new();
@@ -157,32 +158,59 @@ public sealed class MainWindow : Form
         _titleBar.Dock = DockStyle.Top;
         _titleBar.Height = TitleBarHeight;
         _titleBar.BackColor = Theme.Bg;
+        _titleBar.Resize += (_, _) => PositionTitleLabel();
 
-        _titleIconBox.Dock = DockStyle.Left;
-        _titleIconBox.Width = 30;
-        _titleIconBox.BackColor = Color.Transparent;
-        _titleIconBox.Paint += (_, e) =>
+        _brandButton.Dock = DockStyle.Left;
+        _brandButton.Width = 104;
+        _brandButton.BackColor = Color.Transparent;
+        _brandButton.Cursor = Cursors.Hand;
+        _brandButton.AccessibleName = Strings.Get("AboutTitle");
+        _brandButton.MouseEnter += (_, _) => { _brandHovered = true; _brandButton.Invalidate(); };
+        _brandButton.MouseLeave += (_, _) => { _brandHovered = false; _brandButton.Invalidate(); };
+        _brandButton.MouseClick += (_, e) =>
         {
-            if (_appIconBitmap is null)
+            if (e.Button == MouseButtons.Left)
             {
-                return;
+                ShowAboutDialog();
             }
+        };
+        _brandButton.Paint += (_, e) =>
+        {
             var scale = DeviceDpi / 96f;
             var iconSize = Math.Max(16, (int)Math.Round(18 * scale));
-            var x = Math.Max(4, (int)Math.Round(10 * scale));
-            var y = (_titleIconBox.Height - iconSize) / 2;
+            var padX = Math.Max(6, (int)Math.Round(10 * scale));
+            var gap = Math.Max(4, (int)Math.Round(6 * scale));
             ThemePainter.PrepareHighQuality(e.Graphics);
-            e.Graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-            e.Graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
-            e.Graphics.DrawImage(_appIconBitmap, new Rectangle(x, y, iconSize, iconSize));
+
+            if (_brandHovered)
+            {
+                var pill = Rectangle.Inflate(_brandButton.ClientRectangle, -(int)Math.Round(4 * scale), -(int)Math.Round(4 * scale));
+                ThemePainter.FillRounded(e.Graphics, pill, 6, Theme.Hover);
+            }
+
+            var x = padX;
+            if (_appIconBitmap is not null)
+            {
+                var iy = (_brandButton.Height - iconSize) / 2;
+                e.Graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                e.Graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                e.Graphics.DrawImage(_appIconBitmap, new Rectangle(x, iy, iconSize, iconSize));
+                x += iconSize + gap;
+            }
+
+            using var brandFont = new Font("Segoe UI", 9.5f, FontStyle.Bold, GraphicsUnit.Point);
+            const TextFormatFlags flags = TextFormatFlags.NoPadding | TextFormatFlags.SingleLine;
+            var cyberSize = TextRenderer.MeasureText(e.Graphics, "Cyber", brandFont, new Size(int.MaxValue, int.MaxValue), flags);
+            var textY = (_brandButton.Height - cyberSize.Height) / 2;
+            TextRenderer.DrawText(e.Graphics, "Cyber", brandFont, new Point(x, textY), Theme.Text, flags);
+            TextRenderer.DrawText(e.Graphics, "PDF", brandFont, new Point(x + cyberSize.Width, textY), Theme.Accent, flags);
         };
-        _titleIconBox.MouseDown += TitleBarMouseDown;
-        _titleIconBox.MouseDoubleClick += (_, _) => ToggleMaximize();
 
         _titleLabel.AutoSize = false;
-        _titleLabel.Dock = DockStyle.Fill;
-        _titleLabel.TextAlign = ContentAlignment.MiddleLeft;
-        _titleLabel.Padding = new Padding(4, 0, 0, 0);
+        _titleLabel.Dock = DockStyle.None;
+        _titleLabel.Anchor = AnchorStyles.None;
+        _titleLabel.TextAlign = ContentAlignment.MiddleCenter;
+        _titleLabel.Padding = Padding.Empty;
         _titleLabel.ForeColor = Theme.Text;
         _searchBar.BackColor = Theme.Surface;
         _sidePanel.BackColor = Theme.Surface;
@@ -204,15 +232,15 @@ public sealed class MainWindow : Form
         ConfigureWindowButton(_closeButton, IconKind.Close, Strings.Get("CloseWindow"), Close);
         _closeButton.IsDanger = true;
 
-        _titleBar.Controls.Add(_titleLabel);
-        _titleBar.Controls.Add(_titleIconBox);
-
+        _titleBar.Controls.Add(_brandButton);
         // Right-docked, the control added last sits closest to the edge, so the
         // close button goes in last to keep the suite's minimize/maximize/close.
         _titleBar.Controls.Add(_themeButton);
         _titleBar.Controls.Add(_minimizeButton);
         _titleBar.Controls.Add(_maximizeButton);
         _titleBar.Controls.Add(_closeButton);
+        _titleBar.Controls.Add(_titleLabel);
+        PositionTitleLabel();
     }
 
     private static void ConfigureWindowButton(ToolButton button, IconKind icon, string accessibleName, Action onClick)
@@ -996,12 +1024,14 @@ public sealed class MainWindow : Form
         _toolTip.Attach(_printButton, () => Strings.Get("Print"), () => "Ctrl+P");
         _toolTip.Attach(_settingsButton, () => Strings.Get("Settings"), null);
         _toolTip.Attach(_sidePanelButton, () => Strings.Get("ToggleSidePanel"), () => "F4");
+        _toolTip.Attach(_brandButton, () => Strings.Get("AboutTitle"), null);
         _toolTip.Attach(_themeButton, () => Strings.Get("ChangeTheme"), () => "Alt+T");
-        _toolTip.Attach(_minimizeButton, () => Strings.Get("Minimize"), null);
+        _toolTip.Attach(_minimizeButton, () => Strings.Get("Minimize"),
+            () => WindowState == FormWindowState.Maximized ? null : "Win+↓");
         _toolTip.Attach(_maximizeButton,
             () => WindowState == FormWindowState.Maximized ? Strings.Get("Restore") : Strings.Get("Maximize"),
-            () => "F11");
-        _toolTip.Attach(_closeButton, () => Strings.Get("CloseWindow"), () => "Ctrl+W");
+            () => WindowState == FormWindowState.Maximized ? "Win+↓" : "Win+↑");
+        _toolTip.Attach(_closeButton, () => Strings.Get("CloseWindow"), () => "Alt+F4");
         _toolTip.Attach(_searchPreviousButton, () => Strings.Get("SearchPrevious"), () => "Shift+F3");
         _toolTip.Attach(_searchNextButton, () => Strings.Get("SearchNext"), () => "F3");
         _toolTip.Attach(_searchCloseButton, () => Strings.Get("SearchClear"), () => "Esc");
@@ -2589,7 +2619,7 @@ public sealed class MainWindow : Form
         _settingsButton.Invalidate();
         _tabStrip.BackColor = Theme.Bg;
         _tabStrip.Invalidate();
-        _titleIconBox.Invalidate();
+        _brandButton.Invalidate();
 
         foreach (Control control in _toolbar.Controls)
         {
@@ -2799,18 +2829,48 @@ public sealed class MainWindow : Form
     /// </summary>
     private void InvalidateTitleBar()
     {
-        var appName = Strings.Get("AppTitle");
         if (_showingStartTab)
         {
-            _titleLabel.Text = $"{Strings.Get("NewTabTitle")} · {appName}";
+            _titleLabel.ForeColor = Theme.Text;
+            _titleLabel.Text = Strings.Get("NewTabTitle");
+            PositionTitleLabel();
             return;
         }
         if (_documentPath is null)
         {
-            _titleLabel.Text = $"{appName} · {Strings.Get("AppSubtitle")}";
+            _titleLabel.ForeColor = Theme.TextMuted;
+            _titleLabel.Text = Strings.Get("AppSubtitle");
+            PositionTitleLabel();
             return;
         }
-        _titleLabel.Text = $"{Path.GetFileName(_documentPath)} · {appName}";
+        _titleLabel.ForeColor = Theme.Text;
+        _titleLabel.Text = Path.GetFileName(_documentPath);
+        PositionTitleLabel();
+    }
+
+    private void PositionTitleLabel()
+    {
+        if (_titleBar.Width <= 0)
+        {
+            return;
+        }
+
+        var scale = DeviceDpi / 96f;
+        var margin = (int)Math.Round(10 * scale);
+        var minLeft = _brandButton.Right + margin;
+        var maxRight = _themeButton.Left - margin;
+        var available = Math.Max(40, maxRight - minLeft);
+        var symmetricHalf = Math.Max(20, Math.Min(_titleBar.Width / 2 - minLeft, maxRight - _titleBar.Width / 2));
+
+        if (symmetricHalf * 2 >= Math.Min(available, (int)Math.Round(260 * scale)))
+        {
+            var width = symmetricHalf * 2;
+            _titleLabel.Bounds = new Rectangle((_titleBar.Width - width) / 2, 0, width, _titleBar.Height);
+        }
+        else
+        {
+            _titleLabel.Bounds = new Rectangle(minLeft, 0, available, _titleBar.Height);
+        }
     }
 
     // --- Drag and drop, shortcuts, lifetime ---------------------------------
@@ -3119,7 +3179,8 @@ public sealed class MainWindow : Form
         _scrollBar.Width = Math.Max(8, (int)Math.Round(10 * scale));
         _hScrollBar.Height = Math.Max(8, (int)Math.Round(10 * scale));
         _titleBar.Height = (int)Math.Round(TitleBarHeight * scale);
-        _titleIconBox.Width = (int)Math.Round(30 * scale);
+        _brandButton.Width = (int)Math.Round(114 * scale);
+        PositionTitleLabel();
         _tabStrip.Height = (int)Math.Round(32 * scale);
         _toolbar.Height = (int)Math.Round(ToolbarHeight * scale);
         _settingsButton.Width = (int)Math.Round(42 * scale);

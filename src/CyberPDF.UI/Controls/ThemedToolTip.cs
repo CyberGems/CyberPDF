@@ -28,6 +28,7 @@ public sealed class ThemedToolTip : IDisposable
     private readonly Font _shortcutFont = new("Segoe UI", 8f, FontStyle.Regular, GraphicsUnit.Point);
     private readonly Dictionary<Control, Entry> _entries = new();
     private readonly TooltipWindow _window;
+    private readonly DisabledHoverFilter _disabledFilter;
 
     private Control? _pending;
 
@@ -42,6 +43,8 @@ public sealed class ThemedToolTip : IDisposable
                 Show(_pending);
             }
         };
+        _disabledFilter = new DisabledHoverFilter(this);
+        Application.AddMessageFilter(_disabledFilter);
     }
 
     private sealed class Entry
@@ -117,6 +120,28 @@ public sealed class ThemedToolTip : IDisposable
 
     private void Hide() => _window.Hide();
 
+    private void HandleDisabledHover(Control? hit)
+    {
+        if (hit is not null)
+        {
+            if (!ReferenceEquals(_pending, hit))
+            {
+                _pending = hit;
+                Hide();
+                _delay.Stop();
+                _delay.Start();
+            }
+            return;
+        }
+
+        if (_pending is { Enabled: false })
+        {
+            _pending = null;
+            _delay.Stop();
+            Hide();
+        }
+    }
+
     /// <summary>Number of attached controls, for diagnostics.</summary>
     public int Count => _entries.Count;
 
@@ -141,6 +166,7 @@ public sealed class ThemedToolTip : IDisposable
 
     public void Dispose()
     {
+        Application.RemoveMessageFilter(_disabledFilter);
         _delay.Stop();
         _delay.Dispose();
         foreach (var control in _entries.Keys)
@@ -154,6 +180,67 @@ public sealed class ThemedToolTip : IDisposable
         _window.Dispose();
         _font.Dispose();
         _shortcutFont.Dispose();
+    }
+
+    /// <summary>
+    /// WinForms skips MouseEnter/MouseLeave for disabled controls, sending
+    /// WM_MOUSEMOVE to their enabled parent instead. Forwarding hover on disabled
+    /// buttons lets users read what an action does and see its shortcut chip.
+    /// </summary>
+    private sealed class DisabledHoverFilter : IMessageFilter
+    {
+        private const int WmMouseMove = 0x0200;
+        private const int WmLButtonDown = 0x0201;
+        private const int WmRButtonDown = 0x0204;
+
+        private readonly ThemedToolTip _owner;
+
+        public DisabledHoverFilter(ThemedToolTip owner) => _owner = owner;
+
+        public bool PreFilterMessage(ref Message m)
+        {
+            if (m.Msg is WmLButtonDown or WmRButtonDown)
+            {
+                if (_owner._pending is { Enabled: false })
+                {
+                    _owner._pending = null;
+                    _owner._delay.Stop();
+                    _owner.Hide();
+                }
+                return false;
+            }
+
+            if (m.Msg != WmMouseMove)
+            {
+                return false;
+            }
+
+            var form = Control.FromHandle(m.HWnd)?.FindForm();
+            if (form is null || form.IsDisposed || !form.Visible)
+            {
+                return false;
+            }
+
+            var cursor = Cursor.Position;
+            Control? hit = null;
+            foreach (var control in _owner._entries.Keys)
+            {
+                if (control.Enabled || !control.Visible || !control.IsHandleCreated || control.FindForm() != form)
+                {
+                    continue;
+                }
+
+                var bounds = control.RectangleToScreen(control.ClientRectangle);
+                if (bounds.Contains(cursor))
+                {
+                    hit = control;
+                    break;
+                }
+            }
+
+            _owner.HandleDisabledHover(hit);
+            return false;
+        }
     }
 
     /// <summary>
