@@ -157,7 +157,7 @@ public static class TextSelectionEngine
     /// <summary>
     /// Expands a selection to whole words. Used by double click.
     /// </summary>
-    public static TextSelection SelectWordAt(PageTextLayer layer, int characterIndex)
+    public static TextSelection SelectWordAt(PageTextLayer layer, int characterIndex, int pageIndex = 0)
     {
         if (layer.IsEmpty)
         {
@@ -181,13 +181,13 @@ public static class TextSelectionEngine
             end++;
         }
 
-        return new TextSelection(0, layer.Characters[start].Index, layer.Characters[end].Index - layer.Characters[start].Index + 1);
+        return new TextSelection(pageIndex, layer.Characters[start].Index, layer.Characters[end].Index - layer.Characters[start].Index + 1);
     }
 
     /// <summary>
     /// Expands a selection to the whole visual line. Used by triple click.
     /// </summary>
-    public static TextSelection SelectLineAt(PageTextLayer layer, int characterIndex)
+    public static TextSelection SelectLineAt(PageTextLayer layer, int characterIndex, int pageIndex = 0)
     {
         if (layer.IsEmpty)
         {
@@ -208,7 +208,7 @@ public static class TextSelectionEngine
             end++;
         }
 
-        return new TextSelection(0, layer.Characters[start].Index, layer.Characters[end].Index - layer.Characters[start].Index + 1);
+        return new TextSelection(pageIndex, layer.Characters[start].Index, layer.Characters[end].Index - layer.Characters[start].Index + 1);
     }
 
     /// <summary>

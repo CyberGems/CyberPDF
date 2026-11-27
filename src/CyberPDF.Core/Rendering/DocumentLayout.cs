@@ -18,7 +18,7 @@ public readonly record struct PageSlot(int PageIndex, int Top, int Width, int He
 /// </remarks>
 public sealed class DocumentLayout
 {
-    public DocumentLayout(IReadOnlyList<PageSize> pageSizes, float zoom, int gap, int horizontalPadding)
+    public DocumentLayout(IReadOnlyList<PageSize> pageSizes, float zoom, int gap, int horizontalPadding, int rotation = 0)
     {
         ArgumentNullException.ThrowIfNull(pageSizes);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(zoom);
@@ -27,6 +27,9 @@ public sealed class DocumentLayout
         Zoom = zoom;
         Gap = Math.Max(0, gap);
         HorizontalPadding = horizontalPadding;
+
+        var normalizedRotation = ((rotation % 360) + 360) % 360;
+        var swapAxes = normalizedRotation is 90 or 270;
 
         var count = pageSizes.Count;
         var slots = new PageSlot[count];
@@ -44,6 +47,10 @@ public sealed class DocumentLayout
                 widthPt = 595f;
                 heightPt = 842f;
             }
+            if (swapAxes)
+            {
+                (widthPt, heightPt) = (heightPt, widthPt);
+            }
 
             var width = Math.Max(1, (int)Math.Round(widthPt * zoom));
             var height = Math.Max(1, (int)Math.Round(heightPt * zoom));
@@ -58,7 +65,7 @@ public sealed class DocumentLayout
     }
 
     /// <summary>Convenience overload for an open document.</summary>
-    public static DocumentLayout ForDocument(PdfDocument document, float zoom, int gap, int horizontalPadding)
+    public static DocumentLayout ForDocument(PdfDocument document, float zoom, int gap, int horizontalPadding, int rotation = 0)
     {
         ArgumentNullException.ThrowIfNull(document);
         var sizes = new PageSize[document.PageCount];
@@ -66,7 +73,7 @@ public sealed class DocumentLayout
         {
             sizes[i] = document.GetPageSize(i);
         }
-        return new DocumentLayout(sizes, zoom, gap, horizontalPadding);
+        return new DocumentLayout(sizes, zoom, gap, horizontalPadding, rotation);
     }
 
     public float Zoom { get; }

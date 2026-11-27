@@ -51,6 +51,14 @@ public static class Strings
         ["DropHint"] = ("Drop a PDF here or press Ctrl+O", "Arrastra un PDF aquí o pulsa Ctrl+O"),
         ["OpenRecent"] = ("Recent documents", "Documentos recientes"),
         ["NoRecent"] = ("No recent documents yet", "Todavía no hay documentos recientes"),
+        ["RemoveFromList"] = ("Remove from list", "Quitar de la lista"),
+        ["ClearRecent"] = ("Clear list", "Limpiar lista"),
+        ["GoToPage"] = ("Go to page", "Ir a la página"),
+        ["PreviousPage"] = ("Previous page", "Página anterior"),
+        ["NextPage"] = ("Next page", "Página siguiente"),
+        ["ZoomLevel"] = ("Zoom level", "Nivel de zoom"),
+        ["HandTool"] = ("Hand tool (pan)", "Herramienta mano (desplazar)"),
+        ["SelectTool"] = ("Select text", "Seleccionar texto"),
 
         // Errors
         ["ErrorTitle"] = ("Cannot open the document", "No se puede abrir el documento"),

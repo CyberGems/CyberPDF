@@ -7,6 +7,12 @@ using CyberPDF.UI.Theming;
 
 namespace CyberPDF.UI.Controls;
 
+public enum ViewerTool
+{
+    Select,
+    Pan,
+}
+
 /// <summary>
 /// The document surface: a continuous vertical column of pages that scrolls
 /// smoothly and renders only what is visible.
@@ -69,11 +75,22 @@ public sealed class PageViewer : Control
     private DocumentLayout? _layout;
     private float _zoom = 1f;
     private int _rotation;
+    private int _scrollX;
     private int _scrollY;
     private Point _mouseDownPoint;
+    private Point _panStartPoint;
     private bool _panning;
-    private int _panStartScroll;
+    private int _panStartScrollX;
+    private int _panStartScrollY;
+    private bool _selecting;
+    private bool _selectionMoved;
+    private int _selectionAnchorPage;
+    private int _selectionAnchorChar = -1;
+    private long _lastClickTick;
+    private Point _lastClickPoint;
+    private int _clickCount;
     private int _lastDpi = -1;
+    private ViewerTool _activeTool = ViewerTool.Select;
 
     /// <summary>
     /// Prepared search text per page, so a live search while typing does not
@@ -104,11 +121,30 @@ public sealed class PageViewer : Control
     /// <summary>Raised when the visible page or zoom changes, for the status bar.</summary>
     public event EventHandler? ViewStateChanged;
 
+    /// <summary>Raised on Ctrl+Wheel so the host window updates zoom cleanly.</summary>
+    public event EventHandler<float>? ZoomRequested;
+
     public PdfDocument? Document => _document;
+
+    public ViewerTool ActiveTool
+    {
+        get => _activeTool;
+        set
+        {
+            if (_activeTool == value)
+            {
+                return;
+            }
+            _activeTool = value;
+            UpdateHoverCursor(PointToClient(Cursor.Position));
+        }
+    }
 
     public float Zoom => _zoom;
 
     public int Rotation => _rotation;
+
+    public int ScrollX => _scrollX;
 
     public int ScrollY => _scrollY;
 
@@ -159,7 +195,8 @@ public sealed class PageViewer : Control
         _activeMatch = -1;
         _selection = null;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
-        _layout = document is null ? null : DocumentLayout.ForDocument(document, LayoutZoom, GapForZoom(), 0);
+        _layout = document is null ? null : DocumentLayout.ForDocument(document, LayoutZoom, GapForZoom(), 0, _rotation);
+        _scrollX = 0;
         _scrollY = 0;
         Invalidate();
         RequestVisibleRenders();
@@ -232,6 +269,20 @@ public sealed class PageViewer : Control
         RequestVisibleRenders();
         ViewStateChanged?.Invoke(this, EventArgs.Empty);
     }
+
+    public void ScrollHorizontalTo(int value)
+    {
+        var clamped = Math.Clamp(value, 0, Math.Max(0, ContentWidth - ClientSize.Width));
+        if (clamped == _scrollX)
+        {
+            return;
+        }
+        _scrollX = clamped;
+        Invalidate();
+        ViewStateChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void ScrollHorizontalBy(int delta) => ScrollHorizontalTo(_scrollX + delta);
 
     public void ScrollToPage(int pageIndex)
     {
@@ -418,7 +469,7 @@ public sealed class PageViewer : Control
     /// </summary>
     private void RevealActiveMatch()
     {
-        if (_activeMatch < 0 || _activeMatch >= _matches.Count || _layout is null)
+        if (_activeMatch < 0 || _activeMatch >= _matches.Count || _layout is null || _document is null)
         {
             return;
         }
@@ -431,7 +482,31 @@ public sealed class PageViewer : Control
 
         var slot = _layout.Slots[match.PageIndex];
         var context = Math.Max(40, ClientSize.Height / 3);
-        ScrollTo(slot.Top - context);
+        var matchOffsetY = 0;
+        var matchCenterX = slot.Width / 2;
+
+        if (_textLayers.TryGetValue(match.PageIndex, out var layer))
+        {
+            var rects = TextSelectionEngine.BuildHighlightRects(
+                layer,
+                new TextSelection(match.PageIndex, match.Start, match.Length));
+            if (rects.Count > 0)
+            {
+                var size = _document.GetPageSize(match.PageIndex);
+                var transform = new PageTransform(size, slot.Width, slot.Height, _rotation);
+                var cornerA = transform.PdfToView(rects[0].Left, rects[0].Top);
+                var cornerB = transform.PdfToView(rects[0].Right, rects[0].Bottom);
+                matchOffsetY = (int)Math.Floor(Math.Min(cornerA.Y, cornerB.Y));
+                matchCenterX = (int)Math.Round((cornerA.X + cornerB.X) * 0.5);
+            }
+        }
+
+        ScrollTo(slot.Top + matchOffsetY - context);
+        if (ContentWidth > ClientSize.Width)
+        {
+            var pageLeft = _layout.CenteredLeft(slot, ClientSize.Width);
+            ScrollHorizontalTo(pageLeft + matchCenterX - ClientSize.Width / 2);
+        }
         Invalidate();
         SearchChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -567,7 +642,7 @@ public sealed class PageViewer : Control
         var contentY = location.Y + _scrollY;
         foreach (var slot in _layout.VisiblePages(contentY, contentY, includeMargin: false))
         {
-            var left = _layout.CenteredLeft(slot, ClientSize.Width);
+            var left = _layout.CenteredLeft(slot, ClientSize.Width) - _scrollX;
             if (location.X < left || location.X > left + slot.Width)
             {
                 continue;
@@ -633,12 +708,14 @@ public sealed class PageViewer : Control
         if (_document is null)
         {
             _layout = null;
+            _scrollX = 0;
             _scrollY = 0;
             Invalidate();
             return;
         }
 
-        _layout = DocumentLayout.ForDocument(_document, LayoutZoom, GapForZoom(), 0);
+        _layout = DocumentLayout.ForDocument(_document, LayoutZoom, GapForZoom(), 0, _rotation);
+        _scrollX = Math.Clamp(_scrollX, 0, Math.Max(0, _layout.ContentWidth - ClientSize.Width));
 
         if (anchorPage is int page && page < _layout.Slots.Count)
         {
@@ -860,7 +937,7 @@ public sealed class PageViewer : Control
         {
             // Center against the viewport, not the content: fit-width makes both
             // equal, which would pin every page to the left edge.
-            var left = _layout.CenteredLeft(slot, viewport.Width);
+            var left = _layout.CenteredLeft(slot, viewport.Width) - _scrollX;
             var top = slot.Top - _scrollY;
             var pageRect = new Rectangle(left, top, slot.Width, slot.Height);
 
@@ -1012,7 +1089,27 @@ public sealed class PageViewer : Control
     protected override void OnMouseWheel(MouseEventArgs e)
     {
         base.OnMouseWheel(e);
-        ScrollByWheel(e.Delta);
+
+        if (_document is not null && (ModifierKeys & Keys.Control) != 0)
+        {
+            if (e.Delta != 0)
+            {
+                var factor = e.Delta > 0 ? 1.15f : 1f / 1.15f;
+                ZoomRequested?.Invoke(this, factor);
+            }
+        }
+        else if (_document is not null && (ModifierKeys & Keys.Shift) != 0)
+        {
+            if (e.Delta != 0)
+            {
+                var step = Math.Max(32, ClientSize.Width / 8);
+                ScrollHorizontalBy(-Math.Sign(e.Delta) * step);
+            }
+        }
+        else
+        {
+            ScrollByWheel(e.Delta);
+        }
 
         // Marked handled: without it WinForms bubbles the same wheel event to the
         // parent form, which would scroll a second time.
@@ -1051,33 +1148,202 @@ public sealed class PageViewer : Control
     {
         base.OnMouseDown(e);
         Focus();
-        if (e.Button == MouseButtons.Left)
+
+        if (_document is null || _layout is null)
+        {
+            return;
+        }
+
+        if (e.Button == MouseButtons.Middle || (e.Button == MouseButtons.Left && _activeTool == ViewerTool.Pan))
         {
             _panning = true;
-            _mouseDownPoint = e.Location;
-            _panStartScroll = _scrollY;
-            Cursor = Cursors.SizeNS;
+            _panStartPoint = e.Location;
+            _panStartScrollX = _scrollX;
+            _panStartScrollY = _scrollY;
+            Capture = true;
+            Cursor = Cursors.SizeAll;
+            return;
         }
+
+        if (e.Button != MouseButtons.Left)
+        {
+            return;
+        }
+
+        var now = Environment.TickCount64;
+        var withinDoubleClick = now - _lastClickTick <= SystemInformation.DoubleClickTime
+            && Math.Abs(e.X - _lastClickPoint.X) <= SystemInformation.DoubleClickSize.Width
+            && Math.Abs(e.Y - _lastClickPoint.Y) <= SystemInformation.DoubleClickSize.Height;
+        _clickCount = withinDoubleClick ? _clickCount + 1 : 1;
+        _lastClickTick = now;
+        _lastClickPoint = e.Location;
+
+        var hit = HitTestPdfPoint(e.Location);
+        if (hit is not var (pageIndex, pdfX, pdfY))
+        {
+            ClearSelection();
+            return;
+        }
+
+        if (_clickCount == 2)
+        {
+            EnsureTextLayer(pageIndex, () =>
+            {
+                if (_textLayers.TryGetValue(pageIndex, out var layer))
+                {
+                    var index = TextSelectionEngine.ClosestCharacterIndex(layer, pdfX, pdfY);
+                    if (index >= 0)
+                    {
+                        SetSelection(TextSelectionEngine.SelectWordAt(layer, index, pageIndex));
+                    }
+                }
+            });
+            return;
+        }
+
+        if (_clickCount >= 3)
+        {
+            EnsureTextLayer(pageIndex, () =>
+            {
+                if (_textLayers.TryGetValue(pageIndex, out var layer))
+                {
+                    var index = TextSelectionEngine.ClosestCharacterIndex(layer, pdfX, pdfY);
+                    if (index >= 0)
+                    {
+                        SetSelection(TextSelectionEngine.SelectLineAt(layer, index, pageIndex));
+                    }
+                }
+            });
+            return;
+        }
+
+        _selecting = true;
+        _selectionMoved = false;
+        _selectionAnchorPage = pageIndex;
+        _selectionAnchorChar = -1;
+        _mouseDownPoint = e.Location;
+        Capture = true;
+
+        EnsureTextLayer(pageIndex, () =>
+        {
+            if (_textLayers.TryGetValue(pageIndex, out var layer))
+            {
+                _selectionAnchorChar = TextSelectionEngine.ClosestCharacterIndex(layer, pdfX, pdfY);
+                if (_selecting && _selectionMoved && _selectionAnchorChar >= 0)
+                {
+                    UpdateDragSelection(PointToClient(Cursor.Position));
+                }
+            }
+        });
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
-        if (!_panning)
+        if (_panning)
         {
+            ScrollTo(_panStartScrollY + (_panStartPoint.Y - e.Y));
+            ScrollHorizontalTo(_panStartScrollX + (_panStartPoint.X - e.X));
             return;
         }
-        ScrollTo(_panStartScroll + (_mouseDownPoint.Y - e.Y));
+
+        if (_selecting)
+        {
+            if (!_selectionMoved
+                && (Math.Abs(e.X - _mouseDownPoint.X) >= 3 || Math.Abs(e.Y - _mouseDownPoint.Y) >= 3))
+            {
+                _selectionMoved = true;
+            }
+            if (_selectionMoved && _selectionAnchorChar >= 0 && _document is not null && _layout is not null)
+            {
+                UpdateDragSelection(e.Location);
+            }
+            return;
+        }
+
+        UpdateHoverCursor(e.Location);
     }
 
     protected override void OnMouseUp(MouseEventArgs e)
     {
         base.OnMouseUp(e);
-        if (_panning)
+        if (_panning && e.Button is MouseButtons.Middle or MouseButtons.Left)
         {
             _panning = false;
+            Capture = false;
+            UpdateHoverCursor(e.Location);
+            return;
+        }
+
+        if (_selecting && e.Button == MouseButtons.Left)
+        {
+            var moved = _selectionMoved;
+            _selecting = false;
+            Capture = false;
+            if (!moved && _clickCount == 1)
+            {
+                ClearSelection();
+            }
+            UpdateHoverCursor(e.Location);
+        }
+    }
+
+    protected override void OnMouseLeave(EventArgs e)
+    {
+        base.OnMouseLeave(e);
+        if (!_panning && !_selecting)
+        {
             Cursor = Cursors.Default;
         }
+    }
+
+    private void UpdateDragSelection(Point location)
+    {
+        if (_document is null || _layout is null
+            || _selectionAnchorPage < 0 || _selectionAnchorPage >= _layout.Slots.Count
+            || !_textLayers.TryGetValue(_selectionAnchorPage, out var layer))
+        {
+            return;
+        }
+
+        var slot = _layout.Slots[_selectionAnchorPage];
+        var left = _layout.CenteredLeft(slot, ClientSize.Width) - _scrollX;
+        var top = slot.Top - _scrollY;
+        var clampedX = Math.Clamp(location.X - left, 0, Math.Max(0, slot.Width));
+        var clampedY = Math.Clamp(location.Y - top, 0, Math.Max(0, slot.Height));
+
+        var size = _document.GetPageSize(_selectionAnchorPage);
+        var transform = new PageTransform(size, slot.Width, slot.Height, _rotation);
+        var (pdfX, pdfY) = transform.ViewToPdf(clampedX, clampedY);
+
+        var endChar = TextSelectionEngine.ClosestCharacterIndex(layer, pdfX, pdfY);
+        if (endChar < 0)
+        {
+            return;
+        }
+
+        var start = Math.Min(_selectionAnchorChar, endChar);
+        var length = Math.Abs(endChar - _selectionAnchorChar) + 1;
+        var next = new TextSelection(_selectionAnchorPage, start, length);
+        if (_selection != next)
+        {
+            SetSelection(next);
+        }
+    }
+
+    private void UpdateHoverCursor(Point location)
+    {
+        if (_document is null)
+        {
+            Cursor = Cursors.Default;
+            return;
+        }
+        if (_activeTool == ViewerTool.Pan)
+        {
+            Cursor = Cursors.Hand;
+            return;
+        }
+        Cursor = HitTestPdfPoint(location) is not null ? Cursors.IBeam : Cursors.Default;
     }
 
     protected override void OnMouseClick(MouseEventArgs e)
@@ -1088,7 +1354,7 @@ public sealed class PageViewer : Control
 
     protected override bool IsInputKey(Keys keyData) => keyData switch
     {
-        Keys.PageUp or Keys.PageDown or Keys.Home or Keys.End or Keys.Up or Keys.Down => true,
+        Keys.PageUp or Keys.PageDown or Keys.Home or Keys.End or Keys.Up or Keys.Down or Keys.Left or Keys.Right => true,
         _ => base.IsInputKey(keyData),
     };
 
@@ -1110,6 +1376,14 @@ public sealed class PageViewer : Control
                 break;
             case Keys.Up:
                 ScrollBy(-(Font.Height * 3));
+                e.Handled = true;
+                break;
+            case Keys.Right:
+                ScrollHorizontalBy(Font.Height * 3);
+                e.Handled = true;
+                break;
+            case Keys.Left:
+                ScrollHorizontalBy(-(Font.Height * 3));
                 e.Handled = true;
                 break;
             case Keys.Home:

@@ -88,9 +88,13 @@ internal static class ScreenshotProbe
             window.DocumentViewer.SelectAllOnCurrentPage();
             await Task.Delay(2500);
         }
-        else
+        else if (window.HasDocument)
         {
             await Task.Delay(3500);
+        }
+        else
+        {
+            await Task.Delay(250);
         }
 
         // Print the state the capture is about to record, so a suspicious image

@@ -77,8 +77,9 @@ public sealed class TextSelectionEngineTests
     public void DoubleClickSelectsTheWholeRunOfCharacters()
     {
         // Every glyph here is a word character, so the whole line is one word.
-        var selection = TextSelectionEngine.SelectWordAt(Layer(), 2);
+        var selection = TextSelectionEngine.SelectWordAt(Layer(), 2, pageIndex: 4);
 
+        Assert.Equal(4, selection.PageIndex);
         Assert.Equal(0, selection.Start);
         Assert.Equal(5, selection.Length);
     }
@@ -86,9 +87,10 @@ public sealed class TextSelectionEngineTests
     [Fact]
     public void TripleClickSelectsTheVisualLine()
     {
-        var selection = TextSelectionEngine.SelectLineAt(Layer(), 6);
+        var selection = TextSelectionEngine.SelectLineAt(Layer(), 6, pageIndex: 2);
 
         // Second line starts at index 5 and has three characters.
+        Assert.Equal(2, selection.PageIndex);
         Assert.Equal(5, selection.Start);
         Assert.Equal(3, selection.Length);
     }

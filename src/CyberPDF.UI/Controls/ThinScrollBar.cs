@@ -2,13 +2,20 @@ using CyberPDF.UI.Theming;
 
 namespace CyberPDF.UI.Controls;
 
+public enum ScrollBarOrientation
+{
+    Vertical,
+    Horizontal,
+}
+
 /// <summary>
 /// Thin custom scrollbar matching the theme. The native WinForms scrollbar is
-/// drawn by Windows and cannot follow the palette, and it also steals vertical
-/// space the reader needs.
+/// drawn by Windows and cannot follow the palette, and it also steals space
+/// the reader needs.
 /// </summary>
 public sealed class ThinScrollBar : Control
 {
+    private ScrollBarOrientation _orientation = ScrollBarOrientation.Vertical;
     private int _maximum = 100;
     private int _largeChange = 10;
     private int _value;
@@ -30,6 +37,20 @@ public sealed class ThinScrollBar : Control
     }
 
     public event EventHandler? ValueChanged;
+
+    public ScrollBarOrientation Orientation
+    {
+        get => _orientation;
+        set
+        {
+            if (_orientation == value)
+            {
+                return;
+            }
+            _orientation = value;
+            Invalidate();
+        }
+    }
 
     public int Maximum
     {
@@ -79,17 +100,27 @@ public sealed class ThinScrollBar : Control
     private Rectangle ThumbBounds()
     {
         var track = ClientRectangle;
-        if (track.Height <= 0 || _maximum <= 0)
+        if (track.Width <= 0 || track.Height <= 0 || _maximum <= 0)
         {
             return Rectangle.Empty;
         }
 
-        var ratio = (double)_largeChange / (_maximum + _largeChange);
-        var thumbHeight = Math.Max(30, (int)(track.Height * Math.Min(1, ratio)));
-        var scrollable = Math.Max(1, track.Height - thumbHeight);
-        var offset = MaxValue <= 0 ? 0 : (int)Math.Round((double)_value / MaxValue * scrollable);
+        if (_orientation == ScrollBarOrientation.Horizontal)
+        {
+            var ratio = (double)_largeChange / (_maximum + _largeChange);
+            var thumbWidth = Math.Max(30, (int)(track.Width * Math.Min(1, ratio)));
+            var scrollable = Math.Max(1, track.Width - thumbWidth);
+            var offset = MaxValue <= 0 ? 0 : (int)Math.Round((double)_value / MaxValue * scrollable);
+            return new Rectangle(offset, 3, thumbWidth, Math.Max(1, track.Height - 6));
+        }
 
-        return new Rectangle(3, offset, Math.Max(1, track.Width - 6), thumbHeight);
+        {
+            var ratio = (double)_largeChange / (_maximum + _largeChange);
+            var thumbHeight = Math.Max(30, (int)(track.Height * Math.Min(1, ratio)));
+            var scrollable = Math.Max(1, track.Height - thumbHeight);
+            var offset = MaxValue <= 0 ? 0 : (int)Math.Round((double)_value / MaxValue * scrollable);
+            return new Rectangle(3, offset, Math.Max(1, track.Width - 6), thumbHeight);
+        }
     }
 
     private void CoerceValue()
@@ -118,14 +149,14 @@ public sealed class ThinScrollBar : Control
         if (thumb.Contains(e.Location))
         {
             _dragging = true;
-            _dragOffset = e.Y - thumb.Y;
+            _dragOffset = _orientation == ScrollBarOrientation.Horizontal ? e.X - thumb.X : e.Y - thumb.Y;
             Capture = true;
             return;
         }
 
-        // Page up / page down when clicking the empty track above or below the
-        // thumb, the behavior every scrollbar has.
-        ScrollBy(e.Y < thumb.Y ? -_largeChange : _largeChange);
+        var pos = _orientation == ScrollBarOrientation.Horizontal ? e.X : e.Y;
+        var thumbStart = _orientation == ScrollBarOrientation.Horizontal ? thumb.X : thumb.Y;
+        ScrollBy(pos < thumbStart ? -_largeChange : _largeChange);
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
@@ -136,10 +167,18 @@ public sealed class ThinScrollBar : Control
         if (_dragging)
         {
             var track = ClientRectangle;
-            var scrollable = Math.Max(1, track.Height - thumb.Height);
-            var target = e.Y - _dragOffset;
-            var ratio = Math.Clamp((double)target / scrollable, 0, 1);
-            Value = (int)Math.Round(ratio * MaxValue);
+            if (_orientation == ScrollBarOrientation.Horizontal)
+            {
+                var scrollable = Math.Max(1, track.Width - thumb.Width);
+                var ratio = Math.Clamp((double)(e.X - _dragOffset) / scrollable, 0, 1);
+                Value = (int)Math.Round(ratio * MaxValue);
+            }
+            else
+            {
+                var scrollable = Math.Max(1, track.Height - thumb.Height);
+                var ratio = Math.Clamp((double)(e.Y - _dragOffset) / scrollable, 0, 1);
+                Value = (int)Math.Round(ratio * MaxValue);
+            }
             return;
         }
 
@@ -185,7 +224,8 @@ public sealed class ThinScrollBar : Control
             return;
         }
 
-        var radius = Math.Min(thumb.Width / 2, 5);
+        var minor = _orientation == ScrollBarOrientation.Horizontal ? thumb.Height : thumb.Width;
+        var radius = Math.Min(minor / 2, 5);
         ThemePainter.FillRounded(g, thumb, radius, _dragging || _hoverTrack ? Theme.ScrollThumbHover : Theme.ScrollThumb);
     }
 }

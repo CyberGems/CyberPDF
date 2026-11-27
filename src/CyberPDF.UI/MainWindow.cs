@@ -32,7 +32,11 @@ public sealed class MainWindow : Form
     private readonly Panel _statusBar = new();
     private readonly PageViewer _viewer;
     private readonly ThinScrollBar _scrollBar = new();
+    private readonly ThinScrollBar _hScrollBar = new() { Orientation = ScrollBarOrientation.Horizontal };
+    private readonly ToolButton _prevPageButton = new();
+    private readonly ToolButton _nextPageButton = new();
     private readonly Label _pageLabel = new();
+    private readonly UndoableTextBox _pageJumpField = new();
     private readonly Label _zoomLabel = new();
     private readonly Label _titleLabel = new();
     private readonly ToolButton _openButton = new();
@@ -42,6 +46,7 @@ public sealed class MainWindow : Form
     private readonly ToolButton _fitPageButton = new();
     private readonly ToolButton _rotateLeftButton = new();
     private readonly ToolButton _rotateRightButton = new();
+    private readonly ToolButton _handToolButton = new();
     private readonly ToolButton _themeButton = new();
     private readonly ToolButton _copyButton = new();
     private readonly ToolButton _searchButton = new();
@@ -59,6 +64,7 @@ public sealed class MainWindow : Form
     private readonly ToolButton _closeButton = new();
     private readonly ToolButton _sidePanelButton = new();
     private readonly SidePanel _sidePanel;
+    private readonly WelcomeView _welcomeView;
     private readonly Image? _appIconBitmap;
     private ResizeBorderFilter? _resizeFilter;
     private ThemedToolTip? _toolTip;
@@ -86,6 +92,8 @@ public sealed class MainWindow : Form
         {
             Icon = windowIcon;
         }
+        _welcomeView = new WelcomeView(_appIconBitmap);
+        _welcomeView.SetRecentFiles(_settings.RecentFiles);
 
         SuspendLayout();
 
@@ -227,6 +235,7 @@ public sealed class MainWindow : Form
         ConfigureButton(_fitPageButton, IconKind.FitPage, null, FitPage);
         ConfigureButton(_rotateLeftButton, IconKind.RotateLeft, null, () => Rotate(-90));
         ConfigureButton(_rotateRightButton, IconKind.RotateRight, null, () => Rotate(90));
+        ConfigureButton(_handToolButton, IconKind.Hand, null, ToggleHandTool);
         ConfigureButton(_copyButton, IconKind.Copy, Strings.Get("Copy"), CopySelection);
         _copyButton.Enabled = false;
         ConfigureButton(_searchButton, IconKind.Search, null, OpenSearch);
@@ -242,6 +251,7 @@ public sealed class MainWindow : Form
         flow.Controls.Add(Separator());
         flow.Controls.Add(_rotateLeftButton);
         flow.Controls.Add(_rotateRightButton);
+        flow.Controls.Add(_handToolButton);
         flow.Controls.Add(_copyButton);
         flow.Controls.Add(Separator());
         flow.Controls.Add(_searchButton);
@@ -364,13 +374,36 @@ public sealed class MainWindow : Form
             e.Graphics.DrawLine(pen, 0, 0, _statusBar.Width, 0);
         };
 
+        _prevPageButton.Icon = IconKind.PreviousPage;
+        _prevPageButton.Dock = DockStyle.Left;
+        _prevPageButton.Width = 28;
+        _prevPageButton.CornerRadius = 4;
+        _prevPageButton.AccessibleName = Strings.Get("PreviousPage");
+        _prevPageButton.Click += (_, _) => GoToPage(_viewer.FirstVisiblePage - 1);
+
+        _nextPageButton.Icon = IconKind.NextPage;
+        _nextPageButton.Dock = DockStyle.Left;
+        _nextPageButton.Width = 28;
+        _nextPageButton.CornerRadius = 4;
+        _nextPageButton.AccessibleName = Strings.Get("NextPage");
+        _nextPageButton.Click += (_, _) => GoToPage(_viewer.FirstVisiblePage + 1);
+
         _pageLabel.AutoSize = false;
         _pageLabel.Dock = DockStyle.Left;
-        _pageLabel.Width = 260;
-        _pageLabel.TextAlign = ContentAlignment.MiddleLeft;
-        _pageLabel.Padding = new Padding(14, 0, 0, 0);
+        _pageLabel.Width = 135;
+        _pageLabel.TextAlign = ContentAlignment.MiddleCenter;
+        _pageLabel.Padding = new Padding(4, 0, 4, 0);
         _pageLabel.ForeColor = Theme.TextMuted;
         _pageLabel.BackColor = Color.Transparent;
+        _pageLabel.Click += (_, _) => BeginPageJump();
+
+        _pageJumpField.Visible = false;
+        _pageJumpField.BorderStyle = BorderStyle.FixedSingle;
+        _pageJumpField.BackColor = Theme.Canvas;
+        _pageJumpField.ForeColor = Theme.Text;
+        _pageJumpField.TextAlign = HorizontalAlignment.Center;
+        _pageJumpField.KeyDown += OnPageJumpKeyDown;
+        _pageJumpField.LostFocus += (_, _) => EndPageJump(commit: false);
 
         _zoomLabel.AutoSize = false;
         _zoomLabel.Dock = DockStyle.Right;
@@ -379,9 +412,28 @@ public sealed class MainWindow : Form
         _zoomLabel.Padding = new Padding(0, 0, 14, 0);
         _zoomLabel.ForeColor = Theme.TextMuted;
         _zoomLabel.BackColor = Color.Transparent;
+        _zoomLabel.MouseClick += (_, e) =>
+        {
+            if (e.Button == MouseButtons.Left && _document is not null)
+            {
+                ShowZoomMenu();
+            }
+        };
+        _zoomLabel.DoubleClick += (_, _) =>
+        {
+            if (_document is not null)
+            {
+                _fitPageActive = false;
+                ApplyZoom(1f);
+            }
+        };
 
+        // Dock.Left places the last-added control at the far left edge.
         _statusBar.Controls.Add(_zoomLabel);
+        _statusBar.Controls.Add(_nextPageButton);
         _statusBar.Controls.Add(_pageLabel);
+        _statusBar.Controls.Add(_prevPageButton);
+        _statusBar.Controls.Add(_pageJumpField);
     }
 
     /// <summary>
@@ -830,20 +882,26 @@ public sealed class MainWindow : Form
 
         _scrollBar.Dock = DockStyle.Right;
         _scrollBar.Width = 12;
+        _scrollBar.Visible = false;
+
+        _hScrollBar.Dock = DockStyle.Bottom;
+        _hScrollBar.Height = 10;
+        _hScrollBar.Visible = false;
 
         _viewer.Dock = DockStyle.Fill;
+        _viewer.Visible = false;
+        _welcomeView.Dock = DockStyle.Fill;
+        _welcomeView.Visible = true;
 
         // WinForms lays docked children out from the last one added, so Fill
-        // goes in first and the edges after it. The old order gave the viewer
-        // the whole window: its client area measured the full form, the
-        // scrollbar painted on top of the page and the document opened partly
-        // hidden under the chrome. The same rule orders the top chrome, so the
-        // title strip is added last and lands on the very top.
+        // goes in first and the edges after it.
         _sidePanel.Dock = DockStyle.Left;
         _sidePanel.Width = 190;
         _sidePanel.Visible = false;
 
         host.Controls.Add(_viewer);
+        host.Controls.Add(_welcomeView);
+        host.Controls.Add(_hScrollBar);
         host.Controls.Add(_scrollBar);
         host.Controls.Add(_sidePanel);
 
@@ -870,7 +928,12 @@ public sealed class MainWindow : Form
         _toolTip.Attach(_fitPageButton, () => Strings.Get("FitPage"), () => "Alt+P");
         _toolTip.Attach(_rotateLeftButton, () => Strings.Get("RotateLeft"), () => "Alt+R");
         _toolTip.Attach(_rotateRightButton, () => Strings.Get("RotateRight"), () => "Ctrl+R");
+        _toolTip.Attach(_handToolButton, () => _viewer.ActiveTool == ViewerTool.Pan ? Strings.Get("SelectTool") : Strings.Get("HandTool"), () => "Alt+H");
         _toolTip.Attach(_copyButton, () => Strings.Get("Copy"), () => "Ctrl+C");
+        _toolTip.Attach(_prevPageButton, () => Strings.Get("PreviousPage"), null);
+        _toolTip.Attach(_nextPageButton, () => Strings.Get("NextPage"), null);
+        _toolTip.Attach(_pageLabel, () => Strings.Get("GoToPage"), () => "Ctrl+G");
+        _toolTip.Attach(_zoomLabel, () => Strings.Get("ZoomLevel"), null);
         _toolTip.Attach(_searchButton, () => Strings.Get("Search"), () => "Ctrl+F");
         _toolTip.Attach(_sidePanelButton, () => Strings.Get("ToggleSidePanel"), () => "F4");
         _toolTip.Attach(_themeButton, () => Strings.Get("ChangeTheme"), () => "Alt+T");
@@ -896,6 +959,33 @@ public sealed class MainWindow : Form
             }
             _viewer.ScrollTo(_scrollBar.Value);
         };
+        _hScrollBar.ValueChanged += (_, _) =>
+        {
+            if (_updatingScrollBar)
+            {
+                return;
+            }
+            _viewer.ScrollHorizontalTo(_hScrollBar.Value);
+        };
+        _viewer.ZoomRequested += (_, factor) => ChangeZoom(factor);
+
+        _welcomeView.OpenRequested += (_, _) => OpenFile();
+        _welcomeView.FileRequested += (_, path) => OpenDocument(path);
+        _welcomeView.RemoveRecentRequested += (_, path) =>
+        {
+            var normalized = NormalizePath(path);
+            _settings.RecentFiles.RemoveAll(p => string.Equals(NormalizePath(p), normalized, StringComparison.OrdinalIgnoreCase));
+            _store.Save(_settings);
+            _welcomeView.SetRecentFiles(_settings.RecentFiles);
+        };
+        _welcomeView.ClearRecentRequested += (_, _) =>
+        {
+            _settings.RecentFiles.Clear();
+            _store.Save(_settings);
+            _welcomeView.SetRecentFiles(_settings.RecentFiles);
+        };
+        _welcomeView.DragEnter += ViewerDragEnter;
+        _welcomeView.DragDrop += ViewerDragDrop;
 
         _viewer.ViewStateChanged += (_, _) =>
         {
@@ -945,9 +1035,16 @@ public sealed class MainWindow : Form
         _updatingScrollBar = true;
         try
         {
+            _scrollBar.Visible = _document is not null;
             _scrollBar.Maximum = Math.Max(0, _viewer.ContentHeight);
             _scrollBar.LargeChange = Math.Max(1, _viewer.ViewportHeight);
             _scrollBar.Value = _viewer.ScrollY;
+
+            var needHorizontal = _document is not null && _viewer.ContentWidth > _viewer.ClientSize.Width;
+            _hScrollBar.Visible = needHorizontal;
+            _hScrollBar.Maximum = Math.Max(0, _viewer.ContentWidth);
+            _hScrollBar.LargeChange = Math.Max(1, _viewer.ClientSize.Width);
+            _hScrollBar.Value = _viewer.ScrollX;
         }
         finally
         {
@@ -998,6 +1095,8 @@ public sealed class MainWindow : Form
         _documentPath = path;
 
         _viewer.SetDocument(_document);
+        _welcomeView.Visible = false;
+        _viewer.Visible = true;
         _sidePanel.SetDocument(null);
         _sidePanel.Width = _settings.SidePanelWidth;
 
@@ -1014,6 +1113,7 @@ public sealed class MainWindow : Form
         Text = $"{Path.GetFileName(path)} — {Strings.Get("AppTitle")}";
         InvalidateTitleBar();
         RememberRecent(path);
+        _welcomeView.SetRecentFiles(_settings.RecentFiles);
         ApplyStoredViewState(path);
 
         // After the stored zoom, so restoring the panel does not fight it. The
@@ -1057,6 +1157,7 @@ public sealed class MainWindow : Form
             return 1f;
         }
         var size = _document.GetPageSize(pageIndex);
+        var pageWidth = _rotation is 90 or 270 ? size.Height : size.Width;
         var scale = _viewer.DeviceDpi / 96f;
         if (scale <= 0)
         {
@@ -1065,7 +1166,7 @@ public sealed class MainWindow : Form
         // A proportional gutter reads better than a fixed one: at 150% zoom the
         // page should not run into the window edges.
         var viewportPixels = _viewer.ClientSize.Width;
-        if (viewportPixels <= 0 || size.Width <= 0)
+        if (viewportPixels <= 0 || pageWidth <= 0)
         {
             return 1f;
         }
@@ -1075,7 +1176,7 @@ public sealed class MainWindow : Form
         {
             return 1f;
         }
-        return available / (size.Width * scale);
+        return available / (pageWidth * scale);
     }
 
     private void FitWidthOnOpen()
@@ -1462,6 +1563,8 @@ public sealed class MainWindow : Form
             return 1f;
         }
         var size = _document.GetPageSize(pageIndex);
+        var pageWidth = _rotation is 90 or 270 ? size.Height : size.Width;
+        var pageHeight = _rotation is 90 or 270 ? size.Width : size.Height;
         var scale = _viewer.DeviceDpi / 96f;
         if (scale <= 0)
         {
@@ -1470,7 +1573,7 @@ public sealed class MainWindow : Form
 
         var viewportWidth = _viewer.ClientSize.Width;
         var viewportHeight = _viewer.ClientSize.Height;
-        if (viewportWidth <= 0 || viewportHeight <= 0 || size.Width <= 0 || size.Height <= 0)
+        if (viewportWidth <= 0 || viewportHeight <= 0 || pageWidth <= 0 || pageHeight <= 0)
         {
             return 1f;
         }
@@ -1484,8 +1587,8 @@ public sealed class MainWindow : Form
         }
 
         // The tighter of the two constraints is what makes the whole page fit.
-        var byWidth = availableWidth / (size.Width * scale);
-        var byHeight = availableHeight / (size.Height * scale);
+        var byWidth = availableWidth / (pageWidth * scale);
+        var byHeight = availableHeight / (pageHeight * scale);
         return Math.Min(byWidth, byHeight);
     }
 
@@ -1515,11 +1618,132 @@ public sealed class MainWindow : Form
 
     private void Rotate(int degrees)
     {
+        if (_document is null)
+        {
+            return;
+        }
         _rotation = ((_rotation + degrees) % 360 + 360) % 360;
         _viewer.SetRotation(_rotation);
+        if (_fitPageActive)
+        {
+            FitPage();
+        }
+        else if (!_userZoomed)
+        {
+            FitWidthOnOpen();
+        }
         SyncScrollBar();
         UpdateStatus();
         SaveViewState();
+    }
+
+    private void ToggleHandTool()
+    {
+        _viewer.ActiveTool = _viewer.ActiveTool == ViewerTool.Pan
+            ? ViewerTool.Select
+            : ViewerTool.Pan;
+        _handToolButton.IsActive = _document is not null && _viewer.ActiveTool == ViewerTool.Pan;
+    }
+
+    private void GoToPage(int pageIndex)
+    {
+        if (_document is null)
+        {
+            return;
+        }
+        var clamped = Math.Clamp(pageIndex, 0, _document.PageCount - 1);
+        _viewer.ScrollToPage(clamped);
+        SyncScrollBar();
+        UpdateStatus();
+        SaveViewState();
+    }
+
+    private void BeginPageJump()
+    {
+        if (_document is null)
+        {
+            return;
+        }
+
+        var scale = DeviceDpi / 96f;
+        var width = Math.Max(56, (int)Math.Round(68 * scale));
+        var height = Math.Max(18, _statusBar.Height - 6);
+        _pageJumpField.Bounds = new Rectangle(
+            _pageLabel.Left + (int)Math.Round(6 * scale),
+            (_statusBar.Height - height) / 2,
+            width,
+            height);
+        _pageJumpField.ResetHistory((_viewer.FirstVisiblePage + 1).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        _pageJumpField.Visible = true;
+        _pageJumpField.BringToFront();
+        _pageJumpField.Focus();
+        _pageJumpField.SelectAll();
+    }
+
+    private void EndPageJump(bool commit)
+    {
+        if (!_pageJumpField.Visible)
+        {
+            return;
+        }
+        var text = _pageJumpField.Text.Trim();
+        _pageJumpField.Visible = false;
+        if (commit && int.TryParse(text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var pageNumber))
+        {
+            GoToPage(pageNumber - 1);
+        }
+        _viewer.Focus();
+    }
+
+    private void OnPageJumpKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.KeyCode == Keys.Enter)
+        {
+            EndPageJump(commit: true);
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+        }
+        else if (e.KeyCode == Keys.Escape)
+        {
+            EndPageJump(commit: false);
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+        }
+    }
+
+    private void ShowZoomMenu()
+    {
+        if (_document is null)
+        {
+            return;
+        }
+
+        var presets = new[] { 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f, 3.0f };
+        var items = new List<ContextMenuItem>();
+        foreach (var preset in presets)
+        {
+            var zoomValue = preset;
+            var label = Strings.Format("ZoomPercent", (int)Math.Round(zoomValue * 100));
+            var isCurrent = Math.Abs(_viewer.Zoom - zoomValue) < 0.01f;
+            items.Add(new ContextMenuItem(label, () =>
+            {
+                _fitPageActive = false;
+                ApplyZoom(zoomValue);
+            }, isCurrent ? IconKind.Check : IconKind.None));
+        }
+
+        items.Add(ContextMenuItem.Separator());
+        items.Add(new ContextMenuItem(Strings.Get("FitWidth"), FitWidth, IconKind.FitWidth));
+        items.Add(new ContextMenuItem(Strings.Get("FitPage"), FitPage, IconKind.FitPage));
+        items.Add(new ContextMenuItem(Strings.Get("ZoomReset"), () =>
+        {
+            _fitPageActive = false;
+            ApplyZoom(1f);
+        }, IconKind.None));
+
+        var menu = ThemedContextMenu.Create(items.ToArray());
+        var anchor = _zoomLabel.PointToScreen(new Point(0, 0));
+        menu.Show(anchor.X, anchor.Y - menu.PreferredSize.Height);
     }
 
     private void CycleTheme()
@@ -1559,6 +1783,7 @@ public sealed class MainWindow : Form
         _themeButton.AccessibleName = Strings.Get("ChangeTheme");
         _sidePanel.BackColor = Theme.Surface;
         _sidePanel.Invalidate(true);
+        _welcomeView.ApplyTheme();
         _searchBoxHost.BackColor = Theme.Surface;
         _searchBoxHost.Invalidate();
         _matchCaseButton.Invalidate();
@@ -1566,6 +1791,11 @@ public sealed class MainWindow : Form
         _searchPreviousButton.Invalidate();
         _searchNextButton.Invalidate();
         _searchCloseButton.Invalidate();
+        _prevPageButton.Invalidate();
+        _nextPageButton.Invalidate();
+        _pageJumpField.BackColor = Theme.Canvas;
+        _pageJumpField.ForeColor = Theme.Text;
+        _handToolButton.Invalidate();
         _titleIconBox.Invalidate();
 
         foreach (Control control in _toolbar.Controls)
@@ -1586,6 +1816,7 @@ public sealed class MainWindow : Form
 
         _viewer.Invalidate();
         _scrollBar.Invalidate();
+        _hScrollBar.Invalidate();
         _titleBar.Invalidate();
         _toolbar.Invalidate();
         _statusBar.Invalidate();
@@ -1606,13 +1837,23 @@ public sealed class MainWindow : Form
         if (_document is null)
         {
             _pageLabel.Text = Strings.Get("NoDocument");
+            _pageLabel.Cursor = Cursors.Default;
             _zoomLabel.Text = string.Empty;
+            _zoomLabel.Cursor = Cursors.Default;
+            _prevPageButton.Enabled = false;
+            _nextPageButton.Enabled = false;
+            InvalidateTitleBar();
             return;
         }
 
         var page = Math.Min(_viewer.FirstVisiblePage + 1, _document.PageCount);
         _pageLabel.Text = Strings.Format("PageOf", page, _document.PageCount);
+        _pageLabel.Cursor = Cursors.Hand;
         _zoomLabel.Text = Strings.Format("ZoomPercent", (int)Math.Round(_viewer.Zoom * 100));
+        _zoomLabel.Cursor = Cursors.Hand;
+        _prevPageButton.Enabled = page > 1;
+        _nextPageButton.Enabled = page < _document.PageCount;
+        _pageLabel.Width = (int)Math.Round(135 * (DeviceDpi / 96f));
         InvalidateTitleBar();
     }
 
@@ -1625,9 +1866,16 @@ public sealed class MainWindow : Form
         _fitPageButton.Enabled = hasDocument;
         _rotateLeftButton.Enabled = hasDocument;
         _rotateRightButton.Enabled = hasDocument;
+        _handToolButton.Enabled = hasDocument;
+        _handToolButton.IsActive = hasDocument && _viewer.ActiveTool == ViewerTool.Pan;
         _copyButton.Enabled = hasDocument && _viewer.HasSelection;
         _searchButton.Enabled = hasDocument;
         _sidePanelButton.Enabled = hasDocument;
+        if (!hasDocument)
+        {
+            _prevPageButton.Enabled = false;
+            _nextPageButton.Enabled = false;
+        }
         if (!hasDocument && _sidePanel.Visible)
         {
             _sidePanel.Visible = false;
@@ -1843,6 +2091,14 @@ public sealed class MainWindow : Form
                 OpenSearch();
                 e.Handled = true;
                 break;
+            case Keys.G when e.Control:
+                BeginPageJump();
+                e.Handled = true;
+                break;
+            case Keys.H when e.Alt:
+                ToggleHandTool();
+                e.Handled = true;
+                break;
             case Keys.F4:
                 ToggleSidePanel();
                 e.Handled = true;
@@ -1978,10 +2234,13 @@ public sealed class MainWindow : Form
     {
         var scale = DeviceDpi / 96f;
         _scrollBar.Width = Math.Max(8, (int)Math.Round(10 * scale));
+        _hScrollBar.Height = Math.Max(8, (int)Math.Round(10 * scale));
         _titleBar.Height = (int)Math.Round(TitleBarHeight * scale);
         _titleIconBox.Width = (int)Math.Round(28 * scale);
         _toolbar.Height = (int)Math.Round(ToolbarHeight * scale);
         _statusBar.Height = (int)Math.Round(StatusBarHeight * scale);
+        _prevPageButton.Width = (int)Math.Round(28 * scale);
+        _nextPageButton.Width = (int)Math.Round(28 * scale);
         _searchBar.Height = (int)Math.Round(42 * scale);
         _searchBoxHost.Size = new Size((int)Math.Round(256 * scale), (int)Math.Round(30 * scale));
         _searchBoxHost.Padding = new Padding(
@@ -1996,7 +2255,7 @@ public sealed class MainWindow : Form
         _searchPreviousButton.Size = new Size((int)Math.Round(30 * scale), (int)Math.Round(30 * scale));
         _searchNextButton.Size = new Size((int)Math.Round(30 * scale), (int)Math.Round(30 * scale));
         _searchCloseButton.Size = new Size((int)Math.Round(30 * scale), (int)Math.Round(30 * scale));
-        _pageLabel.Width = (int)Math.Round(260 * scale);
+        _pageLabel.Width = (int)Math.Round((_document is null ? 210 : 135) * scale);
 
         var titleHeight = (int)Math.Round(TitleBarHeight * scale);
         foreach (var windowButton in new[] { _themeButton, _minimizeButton, _maximizeButton, _closeButton })

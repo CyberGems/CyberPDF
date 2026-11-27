@@ -112,4 +112,17 @@ public sealed class DocumentLayoutTests
         Assert.Throws<ArgumentOutOfRangeException>(
             () => TestDocuments.Layout(new[] { (600f, 800f) }, 0f, gap: 10, padding: 0));
     }
+
+    [Theory]
+    [InlineData(0, 600, 800)]
+    [InlineData(90, 800, 600)]
+    [InlineData(180, 600, 800)]
+    [InlineData(270, 800, 600)]
+    public void QuarterTurnRotationsSwapSlotAxes(int rotation, int expectedWidth, int expectedHeight)
+    {
+        var layout = new DocumentLayout(new[] { new CyberPDF.Core.Documents.PageSize(600f, 800f) }, 1f, 0, 0, rotation);
+
+        Assert.Equal(expectedWidth, layout.Slots[0].Width);
+        Assert.Equal(expectedHeight, layout.Slots[0].Height);
+    }
 }

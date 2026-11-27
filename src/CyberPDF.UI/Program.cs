@@ -115,10 +115,17 @@ internal static class Program
             window.Shown += async (_, _) =>
             {
                 // Opening is asynchronous (the document is loaded on the PDFium
-                // thread), so wait for it rather than assuming it finished.
-                for (var i = 0; i < 60 && !window.HasDocument; i++)
+                // thread), so wait for it when a target file was specified.
+                if (initial is not null)
                 {
-                    await Task.Delay(100);
+                    for (var i = 0; i < 60 && !window.HasDocument; i++)
+                    {
+                        await Task.Delay(100);
+                    }
+                }
+                else
+                {
+                    await Task.Delay(300);
                 }
                 await ScreenshotProbe.CaptureAsync(window, shotPath, withSelection, searchTerm, panelTab);
                 window.Close();
