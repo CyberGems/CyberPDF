@@ -37,10 +37,12 @@ con una barra flotante, imprime y recuerda el estado por documento.
   (`Ctrl+Rueda` para zoom, `Shift+Rueda` en horizontal), teclado, botón central
   y herramienta mano (`Alt+H`)
 - Selecciona, copia y resalta texto en cuatro colores (Amarillo, Verde, Azul y
-  Rosa con `Alt+M` o desde el menú contextual), guardados por documento en
-  `%LOCALAPPDATA%\CyberPDF\annotations.json`
-- Marcadores personales por página (`Ctrl+B` o menú contextual) mostrados en el
-  panel lateral sobre el índice del documento y con una cinta en miniaturas
+  Rosa con `Alt+M` o desde el menú contextual; haz clic o clic derecho en el
+  botón de resaltar para elegir y recordar el color activo), guardados por
+  documento en `%LOCALAPPDATA%\CyberPDF\annotations.json`
+- Marcadores personales por página (`Ctrl+B` o menú contextual) en el panel
+  lateral sobre el índice del documento, renombrables en línea con doble clic o
+  clic derecho, y marcados con una cinta en las miniaturas
 - Enlaces clicables dentro del PDF (saltos internos de página y enlaces web o
   mailto)
 - Píldora flotante de búsqueda arriba a la derecha (`Ctrl+F`) con opciones de
@@ -53,8 +55,9 @@ con una barra flotante, imprime y recuerda el estado por documento.
 - Impresión (`Ctrl+P`), propiedades del documento (`Ctrl+D`) y recarga (`F5`)
 - Zoom de 10% a 800%, ajustar al ancho, ajustar página completa, volver al 100%
   y rotación en pasos de 90 grados
-- Tres temas (Predeterminado, Gris y Claro) y cambio de idioma español/inglés
-  en vivo desde Ajustes
+- Tres temas (Predeterminado, Gris y Claro), cambio de idioma español/inglés en
+  vivo y configuración como lector de PDF predeterminado en Ajustes (y activada
+  por defecto en el instalador)
 - Una sola ventana por sesión: abrir un segundo PDF lo abre en una nueva pestaña
   de la ventana activa
 - Recuerda el tamaño de ventana, última página, zoom y rotación por documento

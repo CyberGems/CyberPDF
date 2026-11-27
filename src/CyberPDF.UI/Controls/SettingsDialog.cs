@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using CyberPDF.Common.I18n;
 using CyberPDF.Common.Settings;
+using CyberPDF.UI.Services;
 using CyberPDF.UI.Theming;
 
 namespace CyberPDF.UI.Controls;
@@ -36,7 +37,11 @@ public sealed class SettingsDialog : Form
 
     private readonly Label _cacheHeader = new();
     private readonly List<ToolButton> _cacheButtons = new();
+    private readonly Label _defaultPdfHeader = new();
+    private readonly ToolButton _defaultPdfBtn = new();
+    private readonly Label _defaultPdfHint = new();
     private readonly Label _aboutLabel = new();
+    private bool _showDefaultPdfHint;
 
     public SettingsDialog(
         AppSettings settings,
@@ -62,7 +67,7 @@ public sealed class SettingsDialog : Form
         KeyPreview = true;
 
         var scale = DeviceDpi <= 0 ? 1f : DeviceDpi / 96f;
-        ClientSize = new Size((int)Math.Round(460 * scale), (int)Math.Round(430 * scale));
+        ClientSize = new Size((int)Math.Round(460 * scale), (int)Math.Round(512 * scale));
 
         BuildControls(scale);
         RefreshContent();
@@ -155,6 +160,24 @@ public sealed class SettingsDialog : Form
             _cacheButtons.Add(btn);
         }
 
+        y += (int)Math.Round(46 * scale);
+        _defaultPdfHeader.Bounds = new Rectangle(pad, y, width, (int)Math.Round(20 * scale));
+        Controls.Add(_defaultPdfHeader);
+        y += (int)Math.Round(24 * scale);
+
+        ConfigureOptionButton(_defaultPdfBtn, IconKind.None, new Rectangle(pad, y, width, btnH), () =>
+        {
+            var result = PdfAssociationService.SetAsDefaultPdfHandler();
+            _showDefaultPdfHint = result == DefaultPdfResult.OpenedWindowsSettings;
+            RefreshContent();
+        });
+
+        y += (int)Math.Round(34 * scale);
+        _defaultPdfHint.Bounds = new Rectangle(pad, y, width, (int)Math.Round(20 * scale));
+        _defaultPdfHint.Font = new Font("Segoe UI", 8.25f, FontStyle.Regular, GraphicsUnit.Point);
+        _defaultPdfHint.Visible = false;
+        Controls.Add(_defaultPdfHint);
+
         _okButton.ShowBorder = true;
         _okButton.IsActive = true;
         _okButton.Size = new Size((int)Math.Round(96 * scale), (int)Math.Round(34 * scale));
@@ -197,6 +220,8 @@ public sealed class SettingsDialog : Form
         _themeHeader.ForeColor = Theme.TextMuted;
         _langHeader.ForeColor = Theme.TextMuted;
         _cacheHeader.ForeColor = Theme.TextMuted;
+        _defaultPdfHeader.ForeColor = Theme.TextMuted;
+        _defaultPdfHint.ForeColor = Theme.TextMuted;
         _aboutLabel.ForeColor = Theme.TextMuted;
 
         _titleLabel.Text = Strings.Get("Settings");
@@ -234,6 +259,14 @@ public sealed class SettingsDialog : Form
             btn.Invalidate();
         }
 
+        var isDefaultPdf = PdfAssociationService.IsDefaultPdfHandler();
+        _defaultPdfHeader.Text = Strings.Get("DefaultPdfApp");
+        _defaultPdfBtn.Text = isDefaultPdf ? Strings.Get("DefaultPdfActive") : Strings.Get("SetDefaultPdf");
+        _defaultPdfBtn.Icon = isDefaultPdf ? IconKind.Check : IconKind.None;
+        _defaultPdfBtn.IsActive = isDefaultPdf;
+        _defaultPdfHint.Text = Strings.Get("DefaultPdfSettingsHint");
+        _defaultPdfHint.Visible = _showDefaultPdfHint && !isDefaultPdf;
+
         var ver = Assembly.GetExecutingAssembly().GetName().Version;
         var verText = ver is null ? "0.1.0" : $"{ver.Major}.{ver.Minor}.{ver.Build}";
         _aboutLabel.Text = $"{Strings.Get("AppTitle")} · {Strings.Format("VersionLabel", verText)} · PDFium";
@@ -244,6 +277,12 @@ public sealed class SettingsDialog : Form
             control.Invalidate();
         }
         Invalidate();
+    }
+
+    protected override void OnActivated(EventArgs e)
+    {
+        base.OnActivated(e);
+        RefreshContent();
     }
 
     protected override void OnKeyDown(KeyEventArgs e)

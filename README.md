@@ -34,10 +34,12 @@ with a floating bar, prints, and remembers state per document.
   (`Ctrl+Wheel` to zoom, `Shift+Wheel` horizontally), keyboard, middle-drag and
   hand pan tool (`Alt+H`)
 - Select, copy and highlight text in four colors (Yellow, Green, Blue, Pink via
-  `Alt+M` or the page context menu), persisted per document in
+  `Alt+M` or the page context menu; click or right-click the highlight button
+  to change and remember the default color), persisted per document in
   `%LOCALAPPDATA%\CyberPDF\annotations.json`
 - Personal page bookmarks (`Ctrl+B` or context menu) shown in the side panel
-  above the document outline and marked with a ribbon on page thumbnails
+  above the document outline, renameable inline by double-clicking or
+  right-clicking a bookmark, and marked with a ribbon on page thumbnails
 - Clickable PDF links (internal page jumps and external web or mailto links)
 - Floating top-right search pill (`Ctrl+F`) with match case (`Aa`) and whole
   word (`ab`) toggles, match counter, and `Enter` / `Shift+Enter` navigation
@@ -49,8 +51,8 @@ with a floating bar, prints, and remembers state per document.
 - Printing (`Ctrl+P`), document properties (`Ctrl+D`) and reload (`F5`)
 - Zoom from 10% to 800%, fit width, fit whole page, 100% reset, and rotation in
   90 degree steps
-- Three themes (Default, Gray, Light) and live English/Spanish switching in
-  Settings
+- Three themes (Default, Gray, Light), live English/Spanish switching, and
+  default PDF reader setup in Settings (and enabled by default in the installer)
 - One window per session: opening a second PDF hands it to a new tab in the
   running window
 - Remembers window bounds, last page, zoom and rotation per document

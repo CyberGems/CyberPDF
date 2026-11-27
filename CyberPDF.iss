@@ -42,6 +42,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 CloseApplications=yes
 RestartApplications=no
+ChangesAssociations=yes
 DisableProgramGroupPage=yes
 LicenseFile=LICENSE
 
@@ -50,15 +51,15 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 
 [CustomMessages]
-english.AssocGroup=File association:
-english.AssocPdf=Open PDF files with CyberPDF
-english.AssocHint=.pdf files will open in CyberPDF. You can change this later in Windows Settings, Default apps.
+english.AssocGroup=Default reader and file association:
+english.AssocPdf=Set CyberPDF as the default PDF reader
+english.AssocHint=.pdf files will be registered to CyberPDF. If another reader is currently pinned, Windows Default Apps opens at the end so you can confirm in one click.
 english.DesktopShortcut=Create a desktop shortcut
 english.CloseBeforeUninstall=CyberPDF is still running. Close it and click Retry.
 
-spanish.AssocGroup=Asociación de archivos:
-spanish.AssocPdf=Abrir archivos PDF con CyberPDF
-spanish.AssocHint=Los archivos .pdf se abrirán con CyberPDF. Puedes cambiarlo después en Configuración de Windows, Aplicaciones predeterminadas.
+spanish.AssocGroup=Lector predeterminado y asociación de archivos:
+spanish.AssocPdf=Establecer CyberPDF como lector de PDF predeterminado
+spanish.AssocHint=Los archivos .pdf se asociarán a CyberPDF. Si Windows tiene fijado otro lector, se abrirá Aplicaciones predeterminadas al finalizar para confirmarlo en un clic.
 spanish.DesktopShortcut=Crear un acceso directo en el escritorio
 spanish.CloseBeforeUninstall=CyberPDF sigue abierto. Ciérralo y haz clic en Reintentar.
 
@@ -78,17 +79,23 @@ Name: "{group}\{cm:UninstallProgram,{#AppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
 
 [Registry]
-; Per-user association under HKCU, so nothing needs elevation and the user keeps
-; control. ProgID names are versioned to this app to avoid colliding with other
-; readers.
+; Per-user registration under HKCU: no administrator prompt required and the
+; user retains control in Windows Default Apps.
 Root: HKCU; Subkey: "Software\Classes\CyberPDF.Document"; ValueType: string; ValueData: "PDF document"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "Software\Classes\CyberPDF.Document\DefaultIcon"; ValueType: string; ValueData: "{app}\{#AppExeName},0"
+Root: HKCU; Subkey: "Software\Classes\CyberPDF.Document"; ValueType: string; ValueName: "FriendlyTypeName"; ValueData: "PDF document"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\CyberPDF.Document\DefaultIcon"; ValueType: string; ValueData: """{app}\{#AppExeName}"",0"
+Root: HKCU; Subkey: "Software\Classes\CyberPDF.Document\Application"; ValueType: string; ValueName: "ApplicationName"; ValueData: "{#AppName}"
+Root: HKCU; Subkey: "Software\Classes\CyberPDF.Document\Application"; ValueType: string; ValueName: "ApplicationDescription"; ValueData: "{#AppDescription}"
 Root: HKCU; Subkey: "Software\Classes\CyberPDF.Document\shell\open\command"; ValueType: string; ValueData: """{app}\{#AppExeName}"" ""%1"""
+Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExeName}"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "{#AppName}"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExeName}\SupportedTypes"; ValueType: string; ValueName: ".pdf"; ValueData: ""
+Root: HKCU; Subkey: "Software\Classes\Applications\{#AppExeName}\shell\open\command"; ValueType: string; ValueData: """{app}\{#AppExeName}"" ""%1"""
 Root: HKCU; Subkey: "Software\Classes\.pdf\OpenWithProgids"; ValueType: string; ValueName: "CyberPDF.Document"; ValueData: ""; Flags: uninsdeletevalue; Tasks: assocpdf
 Root: HKCU; Subkey: "Software\Classes\.pdf"; ValueType: string; ValueName: ""; ValueData: "CyberPDF.Document"; Flags: uninsdeletevalue; Tasks: assocpdf
-; Tell Explorer the association changed, otherwise the icon and handler can stay
-; cached for a while.
-Root: HKCU; Subkey: "Software\Classes\.pdf"; ValueType: none; ValueName: ""; Flags: uninsdeletevalue; Tasks: assocpdf
+Root: HKCU; Subkey: "Software\CyberGems\CyberPDF\Capabilities"; ValueType: string; ValueName: "ApplicationName"; ValueData: "{#AppName}"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\CyberGems\CyberPDF\Capabilities"; ValueType: string; ValueName: "ApplicationDescription"; ValueData: "{#AppDescription}"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\CyberGems\CyberPDF\Capabilities\FileAssociations"; ValueType: string; ValueName: ".pdf"; ValueData: "CyberPDF.Document"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\RegisteredApplications"; ValueType: string; ValueName: "{#AppName}"; ValueData: "Software\CyberGems\CyberPDF\Capabilities"; Flags: uninsdeletevalue
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
@@ -127,4 +134,24 @@ end;
 procedure InitializeWizard;
 begin
   WizardForm.TasksList.Hint := CustomMessage('AssocHint');
+end;
+
+// If Windows already locks .pdf to another reader via UserChoice, open Windows
+// Default Apps directly after install so the user can confirm in one click.
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  CurrentProgId: String;
+  ErrorCode: Integer;
+begin
+  if (CurStep = ssPostInstall) and WizardIsTaskSelected('assocpdf') and (not WizardSilent) then
+  begin
+    if RegQueryStringValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.pdf\UserChoice', 'ProgId', CurrentProgId) then
+    begin
+      if (CurrentProgId <> '') and (CompareText(CurrentProgId, 'CyberPDF.Document') <> 0) then
+      begin
+        if not ShellExec('open', 'ms-settings:defaultapps?registeredAppUser=CyberPDF', '', '', SW_SHOWNORMAL, ewNoWait, ErrorCode) then
+          ShellExec('open', 'ms-settings:defaultapps', '', '', SW_SHOWNORMAL, ewNoWait, ErrorCode);
+      end;
+    end;
+  end;
 end;
