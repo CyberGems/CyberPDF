@@ -61,6 +61,7 @@ public sealed class MainWindow : Form
     private readonly ToolButton _highlightButton = new();
     private readonly ToolButton _bookmarkButton = new();
     private readonly ToolButton _searchButton = new();
+    private readonly ToolButton _saveAsButton = new();
     private readonly ToolButton _printButton = new();
     private readonly ToolButton _settingsButton = new();
     private readonly Panel _searchBar = new();
@@ -307,6 +308,8 @@ public sealed class MainWindow : Form
         ConfigureButton(_bookmarkButton, IconKind.Bookmark, null, ToggleCurrentPageBookmark);
         _bookmarkButton.AccessibleName = Strings.Get("ToggleBookmark");
         ConfigureButton(_searchButton, IconKind.Search, null, OpenSearch);
+        ConfigureButton(_saveAsButton, IconKind.Save, null, SaveAsDocument);
+        _saveAsButton.AccessibleName = Strings.Get("SaveAs");
         ConfigureButton(_printButton, IconKind.Print, null, PrintDocument);
         ConfigureButton(_sidePanelButton, IconKind.SidePanel, null, ToggleSidePanel);
 
@@ -337,6 +340,7 @@ public sealed class MainWindow : Form
         flow.Controls.Add(_bookmarkButton);
         flow.Controls.Add(Separator());
         flow.Controls.Add(_searchButton);
+        flow.Controls.Add(_saveAsButton);
         flow.Controls.Add(_printButton);
 
         _toolbar.Controls.Add(flow);
@@ -1031,6 +1035,7 @@ public sealed class MainWindow : Form
         _toolTip.Attach(_pageLabel, () => Strings.Get("GoToPage"), () => "Ctrl+G");
         _toolTip.Attach(_zoomLabel, () => Strings.Get("ZoomLevel"), null);
         _toolTip.Attach(_searchButton, () => Strings.Get("Search"), () => "Ctrl+F");
+        _toolTip.Attach(_saveAsButton, () => Strings.Get("SaveAs"), () => "Ctrl+S");
         _toolTip.Attach(_printButton, () => Strings.Get("Print"), () => "Ctrl+P");
         _toolTip.Attach(_settingsButton, () => Strings.Get("Settings"), null);
         _toolTip.Attach(_sidePanelButton, () => Strings.Get("ToggleSidePanel"), () => "F4");
@@ -2151,6 +2156,7 @@ public sealed class MainWindow : Form
             ToggleCurrentPageBookmark,
             bookmarked ? IconKind.BookmarkFilled : IconKind.Bookmark,
             true));
+        items.Add(new ContextMenuItem(Strings.Get("SaveAs"), SaveAsDocument, IconKind.Save, true));
         items.Add(new ContextMenuItem(Strings.Get("Print"), PrintDocument, IconKind.Print, true));
 
         ThemedContextMenu.Create(items.ToArray()).Show(screenLocation);
@@ -2400,6 +2406,75 @@ public sealed class MainWindow : Form
         PdfPrintService.Print(this, _engine, _document, _documentPath);
     }
 
+    private void SaveAsDocument()
+    {
+        if (_document is null || _showingStartTab || string.IsNullOrWhiteSpace(_documentPath))
+        {
+            return;
+        }
+
+        using var dialog = new SaveFileDialog
+        {
+            Title = Strings.Get("SaveAsTitle"),
+            Filter = Strings.Get("PdfFilter"),
+            DefaultExt = "pdf",
+            AddExtension = true,
+            OverwritePrompt = true,
+            InitialDirectory = Path.GetDirectoryName(_documentPath),
+            FileName = Path.GetFileName(_documentPath),
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK || string.IsNullOrWhiteSpace(dialog.FileName))
+        {
+            return;
+        }
+
+        try
+        {
+            if (!DocumentSaver.SaveCopy(_documentPath, dialog.FileName))
+            {
+                return;
+            }
+
+            if (_currentAnnotations.Highlights.Count > 0 || _currentAnnotations.Bookmarks.Count > 0)
+            {
+                var copy = new DocumentAnnotations
+                {
+                    Highlights = _currentAnnotations.Highlights
+                        .Select(h => new TextHighlight
+                        {
+                            Id = h.Id,
+                            PageIndex = h.PageIndex,
+                            Start = h.Start,
+                            Length = h.Length,
+                            Color = h.Color,
+                            Snippet = h.Snippet,
+                        })
+                        .ToList(),
+                    Bookmarks = _currentAnnotations.Bookmarks
+                        .Select(b => new PersonalBookmark
+                        {
+                            PageIndex = b.PageIndex,
+                            Label = b.Label,
+                            CreatedUtcTicks = b.CreatedUtcTicks,
+                        })
+                        .ToList(),
+                };
+                AnnotationStore.SetForDocument(_annotations, dialog.FileName, copy);
+                if (!_suppressPersistenceOnClose)
+                {
+                    _annotationStore.Save(_annotations);
+                }
+            }
+
+            UpdateStatus(Strings.Format("SavedAsStatus", Path.GetFileName(dialog.FileName)));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Core.Diagnostics.AppLog.Warn($"Save As failed: {ex.Message}");
+            MessageBox.Show(this, Strings.Get("SaveAsError"), Strings.Get("SaveAs"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
     private void ReloadDocument()
     {
         if (_documentPath is null || !File.Exists(_documentPath))
@@ -2520,6 +2595,7 @@ public sealed class MainWindow : Form
             new ContextMenuItem(Strings.Get("ReloadDocument"), ReloadDocument, IconKind.Reload, hasDoc),
             new ContextMenuItem(Strings.Get("CloseDocument"), CloseCurrentDocument, IconKind.Close, hasDoc),
             new ContextMenuItem(Strings.Get("DocumentProperties"), ShowDocumentProperties, IconKind.Info, hasDoc),
+            new ContextMenuItem(Strings.Get("SaveAs"), SaveAsDocument, IconKind.Save, hasDoc),
             new ContextMenuItem(Strings.Get("Print"), PrintDocument, IconKind.Print, hasDoc),
             ContextMenuItem.Separator(),
             new ContextMenuItem(Strings.Get("LanguageEn"), () => ApplyLanguage(Lang.En), Strings.Current == Lang.En ? IconKind.Check : IconKind.None),
@@ -2560,6 +2636,7 @@ public sealed class MainWindow : Form
         _searchCloseButton.AccessibleName = Strings.Get("SearchClear");
         _matchCaseButton.AccessibleName = Strings.Get("MatchCase");
         _wholeWordButton.AccessibleName = Strings.Get("WholeWord");
+        _saveAsButton.AccessibleName = Strings.Get("SaveAs");
         _printButton.AccessibleName = Strings.Get("Print");
         _settingsButton.AccessibleName = Strings.Get("Settings");
         _viewModeButton.AccessibleName = Strings.Get("ViewMode");
@@ -2632,6 +2709,7 @@ public sealed class MainWindow : Form
         _selectToolButton.Invalidate();
         _viewModeButton.Invalidate();
         _darkPageButton.Invalidate();
+        _saveAsButton.Invalidate();
         _printButton.Invalidate();
         _settingsButton.Invalidate();
         _tabStrip.BackColor = Theme.Bg;
@@ -2724,6 +2802,7 @@ public sealed class MainWindow : Form
         _bookmarkButton.Enabled = hasDocument;
         UpdateBookmarkButtonState();
         _searchButton.Enabled = hasDocument;
+        _saveAsButton.Enabled = hasDocument;
         _printButton.Enabled = hasDocument;
         _sidePanelButton.Enabled = hasDocument;
         if (!hasDocument)
@@ -2988,6 +3067,10 @@ public sealed class MainWindow : Form
                 break;
             case Keys.P when e.Control:
                 PrintDocument();
+                e.Handled = true;
+                break;
+            case Keys.S when e.Control:
+                SaveAsDocument();
                 e.Handled = true;
                 break;
             case Keys.D when e.Control:

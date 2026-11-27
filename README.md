@@ -86,14 +86,14 @@ Most lightweight readers either start fast but lack the tools you use every day,
 - Multiple PDFs open at once (`Ctrl+Tab` to switch, `Ctrl+W` to close a tab)
 - Open by dialog, drag and drop or command line, with a themed password prompt for protected files
 - Continuous, single-page and two-page layouts, plus an optional dark page filter (`Alt+N`)
-- Vertical and horizontal scrolling with themed scrollbars, mouse wheel (`Ctrl+Wheel` to zoom, `Shift+Wheel` horizontally), middle-drag and hand tool (`Alt+H`)
-- Text selection, copy and highlights in four colors (`Alt+M` or the page context menu), with the default color remembered and annotations saved per document in `%LOCALAPPDATA%\CyberPDF\annotations.json`
+- Vertical and horizontal scrolling with themed scrollbars, mouse wheel (`Ctrl+Wheel` to zoom, `Shift+Wheel` horizontally), middle-drag and default hand tool (`Alt+H`)
+- Text selection tool (`Alt+S`), copy and highlights in four colors (`Alt+M` or the page context menu), with the default color remembered and annotations saved per document in `%LOCALAPPDATA%\CyberPDF\annotations.json`
 - Personal page bookmarks (`Ctrl+B`) shown in the side panel above the outline, renameable inline and marked with a ribbon on thumbnails
 - Clickable internal links and external web or mail links
 - Floating top-right search (`Ctrl+F`) with match case (`Aa`), whole word (`ab`), counter and `Enter` / `Shift+Enter` navigation without shifting the page layout
 - Side panel with thumbnails and bookmarks (`F4`), resizable edge and state remembered per document
 - Interactive status bar: previous and next page, click the page counter (`Ctrl+G`) to jump, click the zoom percentage for presets
-- Printing (`Ctrl+P`), document properties (`Ctrl+D`) and reload (`F5`)
+- Save a copy (`Ctrl+S`), printing (`Ctrl+P`), document properties (`Ctrl+D`) and reload (`F5`)
 - Zoom from 10% to 800%, fit width, fit page, 100% reset and rotation in 90 degree steps
 - Three themes, live English and Spanish switching, and default PDF reader setup in Settings (and checked by default in the installer)
 - System tray icon and themed quick menu (Show/Hide, Open PDF, Settings, Most recent PDFs, Help, About and update check)
@@ -211,11 +211,13 @@ CyberPDF.exe --shot out.png document.pdf
 | `Alt+R` | Rotate counterclockwise |
 | `Alt+W` | Fit width |
 | `Alt+P` | Fit whole page |
-| `Alt+H` | Toggle hand / select tool |
+| `Alt+H` | Hand tool (pan, default) |
+| `Alt+S` | Select text tool |
 | `Alt+N` | Toggle dark page mode |
 | `Alt+T` | Change theme |
 | `Ctrl+F` | Search in the document |
 | `Ctrl+G` | Go to page |
+| `Ctrl+S` | Save a copy (`Save as...`) |
 | `Ctrl+P` | Print |
 | `Ctrl+D` | Document properties |
 | `F4` | Thumbnails and bookmarks |

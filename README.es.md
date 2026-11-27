@@ -86,14 +86,14 @@ Muchos lectores ligeros arrancan rápido pero no tienen las herramientas que usa
 - Varios PDF abiertos a la vez (`Ctrl+Tab` para cambiar, `Ctrl+W` para cerrar una pestaña)
 - Abre desde el diálogo, arrastrando o por línea de comandos, con diálogo de contraseña temático para archivos protegidos
 - Modos continuo, página única y dos páginas, más un filtro nocturno opcional (`Alt+N`)
-- Desplazamiento vertical y horizontal con barras temáticas, rueda del ratón (`Ctrl+Rueda` para zoom, `Shift+Rueda` en horizontal), botón central y herramienta mano (`Alt+H`)
-- Selección, copia y resaltados en cuatro colores (`Alt+M` o menú contextual de la página), con el color activo recordado y anotaciones guardadas por documento en `%LOCALAPPDATA%\CyberPDF\annotations.json`
+- Desplazamiento vertical y horizontal con barras temáticas, rueda del ratón (`Ctrl+Rueda` para zoom, `Shift+Rueda` en horizontal), botón central y herramienta mano predeterminada (`Alt+H`)
+- Herramienta de selección de texto (`Alt+S`), copia y resaltados en cuatro colores (`Alt+M` o menú contextual de la página), con el color activo recordado y anotaciones guardadas por documento en `%LOCALAPPDATA%\CyberPDF\annotations.json`
 - Marcadores personales por página (`Ctrl+B`) en el panel lateral sobre el índice, renombrables en línea y señalados con una cinta en las miniaturas
 - Enlaces internos clicables y enlaces web o de correo externos
 - Búsqueda flotante arriba a la derecha (`Ctrl+F`) con mayúsculas (`Aa`), palabra completa (`ab`), contador y navegación con `Enter` / `Shift+Enter` sin mover el diseño de la página
 - Panel lateral con miniaturas y marcadores (`F4`), borde redimensionable y estado recordado por documento
 - Barra de estado interactiva: página anterior y siguiente, clic en el contador (`Ctrl+G`) para saltar y clic en el zoom para ajustes rápidos
-- Impresión (`Ctrl+P`), propiedades del documento (`Ctrl+D`) y recarga (`F5`)
+- Guardar una copia (`Ctrl+S`), impresión (`Ctrl+P`), propiedades del documento (`Ctrl+D`) y recarga (`F5`)
 - Zoom de 10% a 800%, ajustar al ancho, ajustar página completa, volver al 100% y rotación en pasos de 90 grados
 - Tres temas, cambio de idioma español e inglés en vivo y configuración como lector de PDF predeterminado en Ajustes (y activada por defecto en el instalador)
 - Icono en la bandeja del sistema con menú rápido temático (Mostrar/Ocultar, Abrir PDF, Ajustes, Más recientes, Ayuda, Acerca de y búsqueda de actualizaciones)
@@ -211,11 +211,13 @@ CyberPDF.exe --shot salida.png documento.pdf
 | `Alt+R` | Girar en sentido antihorario |
 | `Alt+W` | Ajustar al ancho |
 | `Alt+P` | Ajustar página completa |
-| `Alt+H` | Alternar herramienta mano / selección |
+| `Alt+H` | Herramienta mano (desplazar, predeterminada) |
+| `Alt+S` | Herramienta de selección de texto |
 | `Alt+N` | Alternar modo nocturno de página |
 | `Alt+T` | Cambiar tema |
 | `Ctrl+F` | Buscar en el documento |
 | `Ctrl+G` | Ir a página |
+| `Ctrl+S` | Guardar una copia (`Guardar como...`) |
 | `Ctrl+P` | Imprimir |
 | `Ctrl+D` | Propiedades del documento |
 | `F4` | Miniaturas y marcadores |

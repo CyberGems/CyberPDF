@@ -502,6 +502,20 @@ public static class Icons
                 g.DrawArc(pen, 3f, 3.2f, 10f, 10f, -55, 290);
                 g.DrawLine(pen, 8f, 2.2f, 8f, 7.6f);
                 break;
+
+            case IconKind.Save:
+                // Chamfered 3.5" diskette silhouette matching Open and Print weights.
+                g.DrawPolygon(pen, new[]
+                {
+                    new PointF(2.4f, 2.4f),
+                    new PointF(11.4f, 2.4f),
+                    new PointF(13.6f, 4.6f),
+                    new PointF(13.6f, 13.6f),
+                    new PointF(2.4f, 13.6f),
+                });
+                g.DrawRectangle(pen, 5f, 2.4f, 5.2f, 3.8f);
+                g.DrawRectangle(pen, 4.6f, 9f, 6.8f, 4.6f);
+                break;
         }
 
         g.Restore(state);
@@ -569,4 +583,5 @@ public enum IconKind
     Pin,
     TrayMinimize,
     Power,
+    Save,
 }

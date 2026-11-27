@@ -18,6 +18,11 @@ public static class Strings
         // Commands
         ["Open"] = ("Open", "Abrir"),
         ["OpenFile"] = ("Open PDF...", "Abrir PDF..."),
+        ["SaveAs"] = ("Save as...", "Guardar como..."),
+        ["SaveAsTitle"] = ("Save PDF copy", "Guardar copia del PDF"),
+        ["PdfFilter"] = ("PDF documents (*.pdf)|*.pdf", "Documentos PDF (*.pdf)|*.pdf"),
+        ["SavedAsStatus"] = ("Saved as {0}.", "Guardado como {0}."),
+        ["SaveAsError"] = ("Could not save a copy of the document.", "No se pudo guardar una copia del documento."),
         ["CloseDocument"] = ("Close document", "Cerrar documento"),
         ["ReloadDocument"] = ("Reload", "Recargar"),
         ["ZoomIn"] = ("Zoom in", "Acercar"),
