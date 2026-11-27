@@ -5,6 +5,7 @@ namespace CyberPDF.Tests;
 
 public sealed class DocumentLayoutTests
 {
+    private static readonly int[] FirstTwoPages = { 0, 1 };
     private static readonly int[] FirstThreePages = { 0, 1, 2 };
 
     [Fact]
@@ -124,5 +125,28 @@ public sealed class DocumentLayoutTests
 
         Assert.Equal(expectedWidth, layout.Slots[0].Width);
         Assert.Equal(expectedHeight, layout.Slots[0].Height);
+    }
+
+    [Fact]
+    public void TwoPageModePairsPagesSideBySide()
+    {
+        var sizes = new[]
+        {
+            new CyberPDF.Core.Documents.PageSize(400f, 600f),
+            new CyberPDF.Core.Documents.PageSize(400f, 600f),
+            new CyberPDF.Core.Documents.PageSize(400f, 600f),
+        };
+        var layout = new DocumentLayout(sizes, 1f, gap: 20, horizontalPadding: 0, mode: PageLayoutMode.TwoPage);
+
+        Assert.Equal(820, layout.ContentWidth);
+        Assert.Equal(0, layout.Slots[0].Top);
+        Assert.Equal(0, layout.Slots[1].Top);
+        Assert.Equal(0, layout.Slots[0].LeftOffset);
+        Assert.Equal(420, layout.Slots[1].LeftOffset);
+        Assert.Equal(620, layout.Slots[2].Top);
+        Assert.Equal(0, layout.Slots[2].LeftOffset);
+
+        var visibleFirstRow = layout.VisiblePages(100, 500, includeMargin: false);
+        Assert.Equal(FirstTwoPages, visibleFirstRow.Select(s => s.PageIndex).ToArray());
     }
 }

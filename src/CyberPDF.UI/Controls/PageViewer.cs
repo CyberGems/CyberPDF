@@ -1,3 +1,4 @@
+using System.Drawing.Imaging;
 using CyberPDF.Common.I18n;
 using CyberPDF.Core.Documents;
 using CyberPDF.Core.Rendering;
@@ -94,6 +95,9 @@ public sealed class PageViewer : Control
     private int _clickCount;
     private int _lastDpi = -1;
     private ViewerTool _activeTool = ViewerTool.Select;
+    private PageLayoutMode _layoutMode = PageLayoutMode.Continuous;
+    private bool _darkPageMode;
+    private ImageAttributes? _darkImageAttributes;
 
     /// <summary>
     /// Prepared search text per page, so a live search while typing does not
@@ -153,6 +157,10 @@ public sealed class PageViewer : Control
 
     public int Rotation => _rotation;
 
+    public PageLayoutMode LayoutMode => _layoutMode;
+
+    public bool DarkPageMode => _darkPageMode;
+
     public int ScrollX => _scrollX;
 
     public int ScrollY => _scrollY;
@@ -189,11 +197,14 @@ public sealed class PageViewer : Control
         ? 0
         : _layout.FirstVisiblePage(_scrollY);
 
-    public void SetDocument(PdfDocument? document)
+    public void SetDocument(PdfDocument? document, bool dropCache = true)
     {
         _document = document;
         ResetTiles();
-        _engine.DropCachedPages();
+        if (dropCache)
+        {
+            _engine.DropCachedPages();
+        }
         _textLayers.Clear();
         _textInFlight.Clear();
         _linkLayers.Clear();
@@ -208,11 +219,72 @@ public sealed class PageViewer : Control
         _activeMatch = -1;
         _selection = null;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
-        _layout = document is null ? null : DocumentLayout.ForDocument(document, LayoutZoom, GapForZoom(), 0, _rotation);
+        _layout = document is null ? null : DocumentLayout.ForDocument(document, LayoutZoom, GapForZoom(), 0, _rotation, _layoutMode);
         _scrollX = 0;
         _scrollY = 0;
         Invalidate();
         RequestVisibleRenders();
+        ViewStateChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void RestoreSessionDocument(
+        PdfDocument document,
+        float zoom,
+        int rotation,
+        int scrollX,
+        int scrollY,
+        PageLayoutMode layoutMode,
+        bool darkPageMode)
+    {
+        _document = document;
+        ResetTiles();
+        _textLayers.Clear();
+        _textInFlight.Clear();
+        _linkLayers.Clear();
+        _linksInFlight.Clear();
+        _hoveredLink = null;
+        LinkHovered?.Invoke(this, null);
+        _highlightCache.Clear();
+        _searchTexts.Clear();
+        _searchedPages.Clear();
+        _searchTerm = string.Empty;
+        _matches.Clear();
+        _activeMatch = -1;
+        _selection = null;
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
+
+        _zoom = Math.Clamp(zoom, 0.1f, 8f);
+        _rotation = ((rotation % 360) + 360) % 360;
+        _layoutMode = layoutMode;
+        _darkPageMode = darkPageMode;
+        _layout = DocumentLayout.ForDocument(document, LayoutZoom, GapForZoom(), 0, _rotation, _layoutMode);
+        _scrollX = Math.Clamp(scrollX, 0, Math.Max(0, _layout.ContentWidth - ClientSize.Width));
+        _scrollY = Math.Clamp(scrollY, 0, Math.Max(0, _layout.ContentHeight - ClientSize.Height));
+        Invalidate();
+        RequestVisibleRenders();
+        ViewStateChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void SetLayoutMode(PageLayoutMode mode)
+    {
+        if (_layoutMode == mode)
+        {
+            return;
+        }
+        var anchorPage = FirstVisiblePage;
+        _layoutMode = mode;
+        RebuildLayout(anchorPage, 0);
+        ViewStateChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void SetDarkPageMode(bool enabled)
+    {
+        if (_darkPageMode == enabled)
+        {
+            return;
+        }
+        _darkPageMode = enabled;
+        Invalidate();
         ViewStateChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -653,8 +725,13 @@ public sealed class PageViewer : Control
         }
 
         var contentY = location.Y + _scrollY;
+        var singlePageIndex = _layoutMode == PageLayoutMode.SinglePage ? FirstVisiblePage : -1;
         foreach (var slot in _layout.VisiblePages(contentY, contentY, includeMargin: false))
         {
+            if (singlePageIndex >= 0 && slot.PageIndex != singlePageIndex)
+            {
+                continue;
+            }
             var left = _layout.CenteredLeft(slot, ClientSize.Width) - _scrollX;
             if (location.X < left || location.X > left + slot.Width)
             {
@@ -727,7 +804,7 @@ public sealed class PageViewer : Control
             return;
         }
 
-        _layout = DocumentLayout.ForDocument(_document, LayoutZoom, GapForZoom(), 0, _rotation);
+        _layout = DocumentLayout.ForDocument(_document, LayoutZoom, GapForZoom(), 0, _rotation, _layoutMode);
         _scrollX = Math.Clamp(_scrollX, 0, Math.Max(0, _layout.ContentWidth - ClientSize.Width));
 
         if (anchorPage is int page && page < _layout.Slots.Count)
@@ -778,7 +855,7 @@ public sealed class PageViewer : Control
             for (var bandTop = 0; bandTop < pageHeight; bandTop += TileHeight)
             {
                 var bandHeight = Math.Min(TileHeight, pageHeight - bandTop);
-                var key = new CacheKey(slot.PageIndex, pageWidth, bandHeight, _rotation, bandTop, pageHeight);
+                var key = new CacheKey(slot.PageIndex, pageWidth, bandHeight, _rotation, bandTop, pageHeight, _document.Id);
                 if (_tiles.ContainsKey(key) || _inFlight.Contains(key))
                 {
                     continue;
@@ -873,13 +950,14 @@ public sealed class PageViewer : Control
     /// </summary>
     private bool IsCurrentKey(CacheKey key)
     {
-        if (_layout is null || key.PageIndex < 0 || key.PageIndex >= _layout.Slots.Count)
+        if (_document is null || _layout is null || key.PageIndex < 0 || key.PageIndex >= _layout.Slots.Count)
         {
             return false;
         }
 
         var slot = _layout.Slots[key.PageIndex];
-        return key.PixelWidth == slot.Width
+        return key.DocumentId == _document.Id
+            && key.PixelWidth == slot.Width
             && key.FullPixelHeight == slot.Height
             && key.Rotation == _rotation;
     }
@@ -946,6 +1024,11 @@ public sealed class PageViewer : Control
         }
 
         var visible = _layout.VisiblePages(_scrollY, _scrollY + viewport.Height, includeMargin: false);
+        if (_layoutMode == PageLayoutMode.SinglePage && visible.Count > 0)
+        {
+            var active = FirstVisiblePage;
+            visible = visible.Where(s => s.PageIndex == active).ToList();
+        }
 
         foreach (var slot in visible)
         {
@@ -962,7 +1045,7 @@ public sealed class PageViewer : Control
             {
                 graphics.FillRectangle(shadow, shadowRect);
             }
-            using (var paper = new SolidBrush(Theme.Paper))
+            using (var paper = new SolidBrush(_darkPageMode ? Theme.DarkPaper : Theme.Paper))
             {
                 graphics.FillRectangle(paper, pageRect);
             }
@@ -971,10 +1054,11 @@ public sealed class PageViewer : Control
                 graphics.DrawRectangle(pageBorder, left - 1, top - 1, slot.Width + 1, slot.Height + 1);
             }
 
+            var attrs = _darkPageMode ? GetDarkImageAttributes() : null;
             for (var bandTop = 0; bandTop < slot.Height; bandTop += TileHeight)
             {
                 var bandHeight = Math.Min(TileHeight, slot.Height - bandTop);
-                var key = new CacheKey(slot.PageIndex, slot.Width, bandHeight, _rotation, bandTop, slot.Height);
+                var key = new CacheKey(slot.PageIndex, slot.Width, bandHeight, _rotation, bandTop, slot.Height, _document.Id);
                 if (!_tiles.TryGetValue(key, out var bitmap))
                 {
                     continue;
@@ -983,7 +1067,14 @@ public sealed class PageViewer : Control
                 // 1:1 in device pixels: the bitmap was rasterized at exactly this
                 // size, so GDI+ does not resample and keeps no scaled copy.
                 var destination = new Rectangle(left, top + bandTop, slot.Width, bandHeight);
-                graphics.DrawImage(bitmap, destination, 0, 0, bitmap.Width, bitmap.Height, GraphicsUnit.Pixel);
+                if (attrs is not null)
+                {
+                    graphics.DrawImage(bitmap, destination, 0, 0, bitmap.Width, bitmap.Height, GraphicsUnit.Pixel, attrs);
+                }
+                else
+                {
+                    graphics.DrawImage(bitmap, destination, 0, 0, bitmap.Width, bitmap.Height, GraphicsUnit.Pixel);
+                }
             }
 
             // Overlays belong to the real paint path, not only to screenshots.
@@ -1499,11 +1590,25 @@ public sealed class PageViewer : Control
         switch (e.KeyCode)
         {
             case Keys.PageDown:
-                ScrollBy(ClientSize.Height - 40);
+                if (_layoutMode == PageLayoutMode.SinglePage)
+                {
+                    ScrollToPage(FirstVisiblePage + 1);
+                }
+                else
+                {
+                    ScrollBy(ClientSize.Height - 40);
+                }
                 e.Handled = true;
                 break;
             case Keys.PageUp:
-                ScrollBy(-(ClientSize.Height - 40));
+                if (_layoutMode == PageLayoutMode.SinglePage)
+                {
+                    ScrollToPage(FirstVisiblePage - 1);
+                }
+                else
+                {
+                    ScrollBy(-(ClientSize.Height - 40));
+                }
                 e.Handled = true;
                 break;
             case Keys.Down:
@@ -1534,11 +1639,32 @@ public sealed class PageViewer : Control
         base.OnKeyDown(e);
     }
 
+    private ImageAttributes GetDarkImageAttributes()
+    {
+        if (_darkImageAttributes is not null)
+        {
+            return _darkImageAttributes;
+        }
+        var matrix = new ColorMatrix(new float[][]
+        {
+            [-0.82f, 0f, 0f, 0f, 0f],
+            [0f, -0.82f, 0f, 0f, 0f],
+            [0f, 0f, -0.80f, 0f, 0f],
+            [0f, 0f, 0f, 1f, 0f],
+            [0.92f, 0.92f, 0.93f, 0f, 1f],
+        });
+        _darkImageAttributes = new ImageAttributes();
+        _darkImageAttributes.SetColorMatrix(matrix);
+        return _darkImageAttributes;
+    }
+
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
             ResetTiles();
+            _darkImageAttributes?.Dispose();
+            _darkImageAttributes = null;
         }
         base.Dispose(disposing);
     }

@@ -15,29 +15,40 @@ CyberPDF; the portable zip is a folder you unzip and run.
 
 ## Status
 
-Phase 0: a working reader. It opens a PDF, renders it continuously, scrolls,
-zooms and rotates, selects and copies text, and searches with highlighting, in
-three themes and two languages. Tabs, thumbnails, bookmarks and printing are not
-implemented yet.
+Active reader in three themes and two languages. It opens multiple PDFs in
+tabs, renders in continuous, single-page or two-page layouts, scrolls
+vertically and horizontally, zooms and rotates, selects and copies text, clicks
+internal and external links, searches with highlighting, prints, and remembers
+state per document.
 
 ## What works today
 
-- Opens a document by dialog, drag and drop, or the command line
-- Continuous vertical scrolling with a themed scrollbar, mouse wheel, keyboard
-  and middle-button panning
-- Select and copy text: drag, double click for a word, triple click for a line
-- Search the whole document with every match highlighted and the active one in
-  a stronger color; `Ctrl+F` opens the bar, `Enter` and `Shift+Enter` walk matches
-- A side panel with page thumbnails and the document's bookmarks, `F4` to show
-  it, drag its edge to resize; click either to jump to that page
-- The panel, its tab and its width come back on the next launch, like the theme
-- One window per session: opening a second PDF hands it to the running window
-- Zoom from 10% to 800%, fit width, fit whole page, 100% reset
-- Rotation in 90 degree steps
-- Three themes: Default, Gray and Light
-- English and Spanish interface
-- Remembers the last page, zoom and rotation per document, and recent files
-- Password protected documents are detected and reported
+- Start screen with a recent documents list and drag-and-drop support
+- Multiple open documents in tabs (`Ctrl+Tab` to switch, `Ctrl+W` to close tab)
+- Opens a document by dialog, drag and drop, or the command line, with a
+  themed password prompt for protected files
+- Continuous, single-page and two-page reading modes, plus an optional dark
+  page filter (`Alt+N`)
+- Smooth vertical and horizontal scrolling with themed scrollbars, mouse wheel
+  (`Ctrl+Wheel` to zoom, `Shift+Wheel` horizontally), keyboard, middle-drag and
+  hand pan tool (`Alt+H`)
+- Select and copy text: drag, double click for a word, triple click for a line,
+  themed context menus with icons
+- Clickable PDF links (internal page jumps and external web or mailto links)
+- Search the whole document with match case and whole word toggles; `Ctrl+F`
+  opens the bar, `Enter` and `Shift+Enter` walk matches
+- Side panel with page thumbnails and document bookmarks (`F4`), resizable edge
+  and remembered state per document
+- Interactive status bar: previous/next page, click page counter (`Ctrl+G`) to
+  jump to any page, click zoom percentage for presets
+- Printing (`Ctrl+P`), document properties (`Ctrl+D`) and reload (`F5`)
+- Zoom from 10% to 800%, fit width, fit whole page, 100% reset, and rotation in
+  90 degree steps
+- Three themes (Default, Gray, Light) and live English/Spanish switching in
+  Settings
+- One window per session: opening a second PDF hands it to a new tab in the
+  running window
+- Remembers window bounds, last page, zoom and rotation per document
 
 ## Why it is fast
 
@@ -115,22 +126,29 @@ CyberPDF.exe --shot out.png document.pdf
 | Keys | Action |
 |---|---|
 | `Ctrl+O` | Open a document |
-| `Ctrl++` / `Ctrl+-` | Zoom in / out |
+| `Ctrl++` / `Ctrl+-` / `Ctrl+Wheel` | Zoom in / out |
 | `Ctrl+0` | Actual size |
 | `Ctrl+R` | Rotate clockwise |
 | `Alt+R` | Rotate counterclockwise |
 | `Alt+W` | Fit width |
 | `Alt+P` | Fit whole page |
+| `Alt+H` | Toggle hand / select tool |
+| `Alt+N` | Toggle dark page mode |
 | `Alt+T` | Change theme |
 | `Ctrl+F` | Search in the document |
+| `Ctrl+G` | Go to page |
+| `Ctrl+P` | Print |
+| `Ctrl+D` | Document properties |
 | `F4` | Thumbnails and bookmarks |
+| `F5` | Reload document |
 | `F3` | Next match |
 | `Shift+F3` | Previous match |
 | `Ctrl+C` | Copy the selection |
 | `Ctrl+A` | Select the current page |
-| `Ctrl+W` | Close |
+| `Ctrl+Tab` | Next open tab |
+| `Ctrl+W` | Close active tab or window |
 | `F11` | Maximize / restore |
-| `Page Up` / `Page Down` | Scroll a screen |
+| `Page Up` / `Page Down` | Scroll a screen or step page |
 | `Home` / `End` | Start / end of document |
 
 ## License

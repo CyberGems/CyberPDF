@@ -2,23 +2,36 @@ using CyberPDF.Core.Documents;
 
 namespace CyberPDF.Core.Rendering;
 
-/// <summary>Where a page sits in the continuous scroll column, in device pixels.</summary>
-public readonly record struct PageSlot(int PageIndex, int Top, int Width, int Height);
+/// <summary>Page arrangement inside the document viewer.</summary>
+public enum PageLayoutMode
+{
+    Continuous,
+    SinglePage,
+    TwoPage,
+}
+
+/// <summary>Where a page sits in the scroll surface, in device pixels.</summary>
+public readonly record struct PageSlot(
+    int PageIndex,
+    int Top,
+    int Width,
+    int Height,
+    int LeftOffset = 0,
+    int RowWidth = 0);
 
 /// <summary>
-/// Computes the vertical layout of every page at a given zoom. Pages are stacked
-/// in a single column with a gap between them, centered horizontally. The result
-/// is what the viewer scrolls over: with this there is no need to render
-/// anything just to know how tall the document is.
+/// Computes the layout of every page at a given zoom, rotation, and mode.
+/// The result is what the viewer scrolls over without needing to render first.
 /// </summary>
-/// <remarks>
-/// The layout only needs page sizes, not an open document. That keeps the math
-/// testable without PDFium and lets the UI compute a preview layout for a
-/// document that is still loading.
-/// </remarks>
 public sealed class DocumentLayout
 {
-    public DocumentLayout(IReadOnlyList<PageSize> pageSizes, float zoom, int gap, int horizontalPadding, int rotation = 0)
+    public DocumentLayout(
+        IReadOnlyList<PageSize> pageSizes,
+        float zoom,
+        int gap,
+        int horizontalPadding,
+        int rotation = 0,
+        PageLayoutMode mode = PageLayoutMode.Continuous)
     {
         ArgumentNullException.ThrowIfNull(pageSizes);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(zoom);
@@ -27,6 +40,7 @@ public sealed class DocumentLayout
         Zoom = zoom;
         Gap = Math.Max(0, gap);
         HorizontalPadding = horizontalPadding;
+        Mode = mode;
 
         var normalizedRotation = ((rotation % 360) + 360) % 360;
         var swapAxes = normalizedRotation is 90 or 270;
@@ -36,27 +50,38 @@ public sealed class DocumentLayout
         var top = horizontalPadding;
         var maxWidth = 0;
 
-        for (var i = 0; i < count; i++)
+        if (mode == PageLayoutMode.TwoPage)
         {
-            // A page with no usable size would collapse the column and make
-            // scrolling jump; treat it as one unscaled A4 instead.
-            var widthPt = pageSizes[i].Width;
-            var heightPt = pageSizes[i].Height;
-            if (!float.IsFinite(widthPt) || !float.IsFinite(heightPt) || widthPt <= 0 || heightPt <= 0)
+            for (var i = 0; i < count; i += 2)
             {
-                widthPt = 595f;
-                heightPt = 842f;
+                var (w0, h0) = MeasureSlotSize(pageSizes[i], zoom, swapAxes);
+                if (i + 1 < count)
+                {
+                    var (w1, h1) = MeasureSlotSize(pageSizes[i + 1], zoom, swapAxes);
+                    var rowWidth = w0 + Gap + w1;
+                    var rowHeight = Math.Max(h0, h1);
+                    slots[i] = new PageSlot(i, top, w0, h0, LeftOffset: 0, RowWidth: rowWidth);
+                    slots[i + 1] = new PageSlot(i + 1, top, w1, h1, LeftOffset: w0 + Gap, RowWidth: rowWidth);
+                    top += rowHeight + Gap;
+                    maxWidth = Math.Max(maxWidth, rowWidth);
+                }
+                else
+                {
+                    slots[i] = new PageSlot(i, top, w0, h0, LeftOffset: 0, RowWidth: w0);
+                    top += h0 + Gap;
+                    maxWidth = Math.Max(maxWidth, w0);
+                }
             }
-            if (swapAxes)
+        }
+        else
+        {
+            for (var i = 0; i < count; i++)
             {
-                (widthPt, heightPt) = (heightPt, widthPt);
+                var (width, height) = MeasureSlotSize(pageSizes[i], zoom, swapAxes);
+                slots[i] = new PageSlot(i, top, width, height);
+                top += height + Gap;
+                maxWidth = Math.Max(maxWidth, width);
             }
-
-            var width = Math.Max(1, (int)Math.Round(widthPt * zoom));
-            var height = Math.Max(1, (int)Math.Round(heightPt * zoom));
-            slots[i] = new PageSlot(i, top, width, height);
-            top += height + Gap;
-            maxWidth = Math.Max(maxWidth, width);
         }
 
         Slots = slots;
@@ -64,8 +89,30 @@ public sealed class DocumentLayout
         ContentHeight = count == 0 ? horizontalPadding * 2 : top - Gap + horizontalPadding;
     }
 
+    private static (int Width, int Height) MeasureSlotSize(PageSize raw, float zoom, bool swapAxes)
+    {
+        var widthPt = raw.Width;
+        var heightPt = raw.Height;
+        if (!float.IsFinite(widthPt) || !float.IsFinite(heightPt) || widthPt <= 0 || heightPt <= 0)
+        {
+            widthPt = 595f;
+            heightPt = 842f;
+        }
+        if (swapAxes)
+        {
+            (widthPt, heightPt) = (heightPt, widthPt);
+        }
+        return (Math.Max(1, (int)Math.Round(widthPt * zoom)), Math.Max(1, (int)Math.Round(heightPt * zoom)));
+    }
+
     /// <summary>Convenience overload for an open document.</summary>
-    public static DocumentLayout ForDocument(PdfDocument document, float zoom, int gap, int horizontalPadding, int rotation = 0)
+    public static DocumentLayout ForDocument(
+        PdfDocument document,
+        float zoom,
+        int gap,
+        int horizontalPadding,
+        int rotation = 0,
+        PageLayoutMode mode = PageLayoutMode.Continuous)
     {
         ArgumentNullException.ThrowIfNull(document);
         var sizes = new PageSize[document.PageCount];
@@ -73,7 +120,7 @@ public sealed class DocumentLayout
         {
             sizes[i] = document.GetPageSize(i);
         }
-        return new DocumentLayout(sizes, zoom, gap, horizontalPadding, rotation);
+        return new DocumentLayout(sizes, zoom, gap, horizontalPadding, rotation, mode);
     }
 
     public float Zoom { get; }
@@ -81,6 +128,8 @@ public sealed class DocumentLayout
     public int Gap { get; }
 
     public int HorizontalPadding { get; }
+
+    public PageLayoutMode Mode { get; }
 
     /// <summary>Full width of the scroll content, in device pixels.</summary>
     public int ContentWidth { get; }
@@ -90,27 +139,25 @@ public sealed class DocumentLayout
 
     public IReadOnlyList<PageSlot> Slots { get; }
 
-    /// <summary>
-    /// Left edge of a page inside the content, centered horizontally. This is
-    /// only correct when the content is the viewport; a viewer paints into its
-    /// own client width and must use <see cref="CenteredLeft"/> instead.
-    /// </summary>
-    public int LeftOf(in PageSlot slot) => (ContentWidth - slot.Width) / 2;
-
-    /// <summary>
-    /// Left edge of a page inside a viewport of the given width, centered. The
-    /// layout itself has no idea how wide the window is, so the caller passes it.
-    /// </summary>
-    public int CenteredLeft(in PageSlot slot, int viewportWidth)
+    public int LeftOf(in PageSlot slot)
     {
-        var effective = Math.Max(ContentWidth, viewportWidth);
-        return Math.Max(0, (effective - slot.Width) / 2);
+        var rowWidth = slot.RowWidth > 0 ? slot.RowWidth : slot.Width;
+        return (ContentWidth - rowWidth) / 2 + slot.LeftOffset;
     }
 
     /// <summary>
-    /// Index of the page the viewport top falls inside. Past the end of the
-    /// document it returns the last page, so the status bar and the scrollbar
-    /// agree instead of jumping back to page 1.
+    /// Left edge of a page inside a viewport of the given width, centered.
+    /// </summary>
+    public int CenteredLeft(in PageSlot slot, int viewportWidth)
+    {
+        var rowWidth = slot.RowWidth > 0 ? slot.RowWidth : slot.Width;
+        var effective = Math.Max(ContentWidth, viewportWidth);
+        var rowLeft = Math.Max(0, (effective - rowWidth) / 2);
+        return rowLeft + slot.LeftOffset;
+    }
+
+    /// <summary>
+    /// Index of the page the viewport top falls inside.
     /// </summary>
     public int FirstVisiblePage(int y)
     {
@@ -121,36 +168,42 @@ public sealed class DocumentLayout
 
         var clamped = Math.Max(0, y);
         var last = Slots.Count - 1;
+        int result;
         if (clamped >= Slots[last].Top)
         {
-            return last;
+            result = last;
+        }
+        else
+        {
+            var low = 0;
+            var high = last;
+            result = 0;
+            while (low <= high)
+            {
+                var mid = low + (high - low) / 2;
+                var slot = Slots[mid];
+                if (slot.Top <= clamped)
+                {
+                    result = mid;
+                    low = mid + 1;
+                }
+                else
+                {
+                    high = mid - 1;
+                }
+            }
         }
 
-        var low = 0;
-        var high = last;
-        var result = 0;
-        while (low <= high)
+        // In TwoPage mode, return the left-most page of the active spread row.
+        while (result > 0 && Slots[result - 1].Top == Slots[result].Top)
         {
-            var mid = low + (high - low) / 2;
-            var slot = Slots[mid];
-            if (slot.Top <= clamped)
-            {
-                result = mid;
-                low = mid + 1;
-            }
-            else
-            {
-                high = mid - 1;
-            }
+            result--;
         }
         return result;
     }
 
     /// <summary>
-    /// Pages intersecting the vertical range [top, bottom]. With
-    /// <paramref name="includeMargin"/> set, pages that only touch the range are
-    /// included too, which is what the renderer wants so a page does not start
-    /// rendering only when its first pixel becomes visible.
+    /// Pages intersecting the vertical range [top, bottom].
     /// </summary>
     public List<PageSlot> VisiblePages(int top, int bottom, bool includeMargin = true)
     {
@@ -161,14 +214,21 @@ public sealed class DocumentLayout
         }
 
         var first = FirstVisiblePage(Math.Max(0, top));
-        if (first > 0)
+        while (first > 0)
         {
-            // The page above can still overlap the range when scrolling inside it.
             var previous = Slots[first - 1];
             if (previous.Top + previous.Height > top)
             {
                 first--;
             }
+            else
+            {
+                break;
+            }
+        }
+        while (first > 0 && Slots[first - 1].Top == Slots[first].Top)
+        {
+            first--;
         }
 
         for (var i = first; i < Slots.Count; i++)

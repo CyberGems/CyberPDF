@@ -149,4 +149,23 @@ public sealed class PageBitmapCacheTests
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => new PageBitmapCache(0));
     }
+
+    [Fact]
+    public void DifferentDocumentIdsDoNotCollide()
+    {
+        using var cache = new PageBitmapCache(1024 * 1024);
+        var docA = new CacheKey(0, 100, 100, 0, DocumentId: 1);
+        var docB = new CacheKey(0, 100, 100, 0, DocumentId: 2);
+        var pageA = TestPage.Create(100, 100);
+        var pageB = TestPage.Create(100, 100);
+
+        cache.Add(docA, pageA);
+        cache.Add(docB, pageB);
+
+        Assert.Equal(2, cache.Count);
+        Assert.True(cache.TryGet(docA, out var gotA));
+        Assert.True(cache.TryGet(docB, out var gotB));
+        Assert.Same(pageA, gotA);
+        Assert.Same(pageB, gotB);
+    }
 }

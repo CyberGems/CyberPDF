@@ -28,6 +28,7 @@ public sealed class MainWindow : Form
 
     private readonly Panel _titleBar = new();
     private readonly Panel _titleIconBox = new();
+    private readonly TabStrip _tabStrip = new();
     private readonly Panel _toolbar = new();
     private readonly Panel _statusBar = new();
     private readonly PageViewer _viewer;
@@ -44,6 +45,8 @@ public sealed class MainWindow : Form
     private readonly ToolButton _zoomInButton = new();
     private readonly ToolButton _fitWidthButton = new();
     private readonly ToolButton _fitPageButton = new();
+    private readonly ToolButton _viewModeButton = new();
+    private readonly ToolButton _darkPageButton = new();
     private readonly ToolButton _rotateLeftButton = new();
     private readonly ToolButton _rotateRightButton = new();
     private readonly ToolButton _handToolButton = new();
@@ -71,6 +74,8 @@ public sealed class MainWindow : Form
     private ResizeBorderFilter? _resizeFilter;
     private ThemedToolTip? _toolTip;
 
+    private readonly List<DocumentSession> _sessions = new();
+    private int _activeSessionIndex = -1;
     private PdfDocument? _document;
     private bool _diagRequested;
     private bool _stressRequested;
@@ -236,6 +241,8 @@ public sealed class MainWindow : Form
         ConfigureButton(_zoomInButton, IconKind.ZoomIn, null, () => ChangeZoom(1.25f));
         ConfigureButton(_fitWidthButton, IconKind.FitWidth, null, FitWidth);
         ConfigureButton(_fitPageButton, IconKind.FitPage, null, FitPage);
+        ConfigureButton(_viewModeButton, IconKind.ContinuousPage, null, ShowViewModeMenu);
+        ConfigureButton(_darkPageButton, IconKind.InvertColors, null, ToggleDarkPageMode);
         ConfigureButton(_rotateLeftButton, IconKind.RotateLeft, null, () => Rotate(-90));
         ConfigureButton(_rotateRightButton, IconKind.RotateRight, null, () => Rotate(90));
         ConfigureButton(_handToolButton, IconKind.Hand, null, ToggleHandTool);
@@ -258,6 +265,8 @@ public sealed class MainWindow : Form
         flow.Controls.Add(_zoomInButton);
         flow.Controls.Add(_fitWidthButton);
         flow.Controls.Add(_fitPageButton);
+        flow.Controls.Add(_viewModeButton);
+        flow.Controls.Add(_darkPageButton);
         flow.Controls.Add(Separator());
         flow.Controls.Add(_rotateLeftButton);
         flow.Controls.Add(_rotateRightButton);
@@ -917,10 +926,14 @@ public sealed class MainWindow : Form
         host.Controls.Add(_scrollBar);
         host.Controls.Add(_sidePanel);
 
+        _tabStrip.Dock = DockStyle.Top;
+        _tabStrip.Height = 32;
+
         Controls.Add(host);
         Controls.Add(_statusBar);
         Controls.Add(_searchBar);
         Controls.Add(_toolbar);
+        Controls.Add(_tabStrip);
         Controls.Add(_titleBar);
     }
 
@@ -938,6 +951,8 @@ public sealed class MainWindow : Form
         _toolTip.Attach(_zoomInButton, () => Strings.Get("ZoomIn"), () => "Ctrl++");
         _toolTip.Attach(_fitWidthButton, () => Strings.Get("FitWidth"), () => "Alt+W");
         _toolTip.Attach(_fitPageButton, () => Strings.Get("FitPage"), () => "Alt+P");
+        _toolTip.Attach(_viewModeButton, () => Strings.Get("ViewMode"), null);
+        _toolTip.Attach(_darkPageButton, () => Strings.Get("DarkPageMode"), () => "Alt+N");
         _toolTip.Attach(_rotateLeftButton, () => Strings.Get("RotateLeft"), () => "Alt+R");
         _toolTip.Attach(_rotateRightButton, () => Strings.Get("RotateRight"), () => "Ctrl+R");
         _toolTip.Attach(_handToolButton, () => _viewer.ActiveTool == ViewerTool.Pan ? Strings.Get("SelectTool") : Strings.Get("HandTool"), () => "Alt+H");
@@ -988,6 +1003,10 @@ public sealed class MainWindow : Form
             UpdateStatus();
         };
         _viewer.LinkPageRequested += (_, _) => SaveViewState();
+
+        _tabStrip.TabSelected += (_, index) => ActivateSession(index);
+        _tabStrip.TabCloseRequested += (_, index) => CloseTab(index);
+        _tabStrip.NewTabRequested += (_, _) => OpenFile();
 
         _welcomeView.OpenRequested += (_, _) => OpenFile();
         _welcomeView.FileRequested += (_, path) => OpenDocument(path);
@@ -1088,8 +1107,19 @@ public sealed class MainWindow : Form
         }
     }
 
-    public void OpenDocument(string path, string? password = null)
+    public void OpenDocument(string path, string? password = null, bool forceReload = false)
     {
+        var normalized = NormalizePath(path);
+        if (!forceReload)
+        {
+            var existing = _sessions.FindIndex(s => string.Equals(s.FilePath, normalized, StringComparison.OrdinalIgnoreCase));
+            if (existing >= 0)
+            {
+                ActivateSession(existing);
+                return;
+            }
+        }
+
         UpdateStatus(Strings.Get("Loading"));
         _engine.OpenDocument(path, password, result =>
         {
@@ -1097,11 +1127,11 @@ public sealed class MainWindow : Form
             {
                 return;
             }
-            BeginInvoke(() => OnDocumentOpened(path, result));
+            BeginInvoke(() => OnDocumentOpened(path, result, forceReload));
         });
     }
 
-    private void OnDocumentOpened(string path, PdfOpenResult result)
+    private void OnDocumentOpened(string path, PdfOpenResult result, bool replaceActive)
     {
         if (!result.Success)
         {
@@ -1112,7 +1142,7 @@ public sealed class MainWindow : Form
                     wrongPassword: result.Error == PdfOpenError.WrongPassword);
                 if (dialog.ShowDialog(this) == DialogResult.OK)
                 {
-                    OpenDocument(path, dialog.Password);
+                    OpenDocument(path, dialog.Password, replaceActive);
                     return;
                 }
                 UpdateStatus();
@@ -1122,25 +1152,54 @@ public sealed class MainWindow : Form
             return;
         }
 
-        var previous = _document;
-        _document = result.Document;
-        path = NormalizePath(path);
-        _documentPath = path;
+        if (result.Document is null)
+        {
+            return;
+        }
 
-        _viewer.SetDocument(_document);
+        path = NormalizePath(path);
+        PdfDocument? previousToClose = null;
+
+        if (replaceActive && _activeSessionIndex >= 0 && _activeSessionIndex < _sessions.Count)
+        {
+            SaveCurrentSessionToMemory();
+            previousToClose = _sessions[_activeSessionIndex].Document;
+            _sessions[_activeSessionIndex] = new DocumentSession
+            {
+                Document = result.Document,
+                FilePath = path,
+                LayoutMode = _viewer.LayoutMode,
+                DarkPageMode = _viewer.DarkPageMode,
+            };
+        }
+        else
+        {
+            SaveCurrentSessionToMemory();
+            _sessions.Add(new DocumentSession
+            {
+                Document = result.Document,
+                FilePath = path,
+                LayoutMode = _viewer.LayoutMode,
+                DarkPageMode = _viewer.DarkPageMode,
+            });
+            _activeSessionIndex = _sessions.Count - 1;
+        }
+
+        _document = result.Document;
+        _documentPath = path;
+        _linkHoverPreview = null;
+
+        _viewer.SetDocument(_document, dropCache: false);
         _welcomeView.Visible = false;
         _viewer.Visible = true;
         _sidePanel.SetDocument(null);
         _sidePanel.Width = _settings.SidePanelWidth;
 
-        // First view: fit the page width, but never zoom past 100%. A document
-        // whose page is taller than the screen (an exported web page, a poster)
-        // would otherwise open mid-page with the top cut off.
         FitWidthOnOpen();
 
-        if (previous is not null)
+        if (previousToClose is not null)
         {
-            _engine.CloseDocument(previous);
+            _engine.CloseDocument(previousToClose);
         }
 
         Text = $"{Path.GetFileName(path)} — {Strings.Get("AppTitle")}";
@@ -1149,9 +1208,6 @@ public sealed class MainWindow : Form
         _welcomeView.SetRecentFiles(_settings.RecentFiles);
         ApplyStoredViewState(path);
 
-        // After the stored zoom, so restoring the panel does not fight it. The
-        // document's own choice wins; its tab comes back with it. A document
-        // opened for the first time follows the global preference.
         var stored = _settings.RememberPagePosition
                      && _settings.ViewStates.TryGetValue(path, out var state)
             ? state
@@ -1170,10 +1226,130 @@ public sealed class MainWindow : Form
             _sidePanel.Visible = false;
         }
 
+        SaveCurrentSessionToMemory();
+        SyncTabStrip();
         SyncScrollBar();
         UpdateCommandStates();
         UpdateStatus();
         _viewer.Focus();
+    }
+
+    private void SaveCurrentSessionToMemory()
+    {
+        if (_activeSessionIndex < 0 || _activeSessionIndex >= _sessions.Count || _document is null)
+        {
+            return;
+        }
+        var s = _sessions[_activeSessionIndex];
+        s.Zoom = _viewer.Zoom;
+        s.Rotation = _viewer.Rotation;
+        s.ScrollX = _viewer.ScrollX;
+        s.ScrollY = _viewer.ScrollY;
+        s.UserZoomed = _userZoomed;
+        s.FitPageActive = _fitPageActive;
+        s.SidePanelOpen = _sidePanel.Visible;
+        s.SidePanelTab = _sidePanel.Mode;
+        s.LayoutMode = _viewer.LayoutMode;
+        s.DarkPageMode = _viewer.DarkPageMode;
+    }
+
+    private void ActivateSession(int index)
+    {
+        if (index < 0 || index >= _sessions.Count || index == _activeSessionIndex)
+        {
+            return;
+        }
+
+        SaveCurrentSessionToMemory();
+        SaveViewState();
+
+        _activeSessionIndex = index;
+        var target = _sessions[index];
+        _document = target.Document;
+        _documentPath = target.FilePath;
+        _zoom = target.Zoom;
+        _rotation = target.Rotation;
+        _userZoomed = target.UserZoomed;
+        _fitPageActive = target.FitPageActive;
+        _linkHoverPreview = null;
+
+        _viewer.RestoreSessionDocument(
+            target.Document,
+            target.Zoom,
+            target.Rotation,
+            target.ScrollX,
+            target.ScrollY,
+            target.LayoutMode,
+            target.DarkPageMode);
+        _welcomeView.Visible = false;
+        _viewer.Visible = true;
+
+        _sidePanel.SetDocument(null);
+        if (target.SidePanelOpen)
+        {
+            _settings.SidePanelTab = target.SidePanelTab;
+            SetSidePanelVisible(true, persist: false);
+        }
+        else
+        {
+            _sidePanel.Visible = false;
+        }
+
+        Text = $"{Path.GetFileName(target.FilePath)} — {Strings.Get("AppTitle")}";
+        SyncTabStrip();
+        SyncScrollBar();
+        UpdateCommandStates();
+        UpdateStatus();
+        _viewer.Focus();
+    }
+
+    private void CloseTab(int index)
+    {
+        if (index < 0 || index >= _sessions.Count)
+        {
+            return;
+        }
+
+        if (index == _activeSessionIndex)
+        {
+            SaveCurrentSessionToMemory();
+            SaveViewState();
+        }
+
+        var closing = _sessions[index];
+        _sessions.RemoveAt(index);
+        _engine.CloseDocument(closing.Document);
+
+        if (_sessions.Count == 0)
+        {
+            _activeSessionIndex = -1;
+            _document = null;
+            _documentPath = null;
+            _linkHoverPreview = null;
+            _viewer.SetDocument(null);
+            _viewer.Visible = false;
+            _welcomeView.Visible = true;
+            _sidePanel.SetDocument(null);
+            _sidePanel.Visible = false;
+            Text = Strings.Get("AppTitle");
+            SyncTabStrip();
+            SyncScrollBar();
+            UpdateCommandStates();
+            UpdateStatus();
+            return;
+        }
+
+        var nextIndex = Math.Clamp(index, 0, _sessions.Count - 1);
+        _activeSessionIndex = -1;
+        ActivateSession(nextIndex);
+    }
+
+    private void SyncTabStrip()
+    {
+        var items = _sessions
+            .Select(s => new DocumentTabItem(s.FilePath, Path.GetFileName(s.FilePath), s.FilePath))
+            .ToList();
+        _tabStrip.SetTabs(items, _activeSessionIndex);
     }
 
     /// <summary>Fits the page width on the first view, clamped to a 100% maximum.</summary>
@@ -1191,6 +1367,7 @@ public sealed class MainWindow : Form
         }
         var size = _document.GetPageSize(pageIndex);
         var pageWidth = _rotation is 90 or 270 ? size.Height : size.Width;
+        var twoPages = _viewer.LayoutMode == PageLayoutMode.TwoPage && _document.PageCount > 1;
         var scale = _viewer.DeviceDpi / 96f;
         if (scale <= 0)
         {
@@ -1204,12 +1381,13 @@ public sealed class MainWindow : Form
             return 1f;
         }
         var gutter = Math.Max(32, (int)(viewportPixels * 0.06));
-        var available = viewportPixels - gutter * 2;
+        var spreadGap = twoPages ? (int)Math.Round(12 * scale) : 0;
+        var available = viewportPixels - gutter * 2 - spreadGap;
         if (available <= 0)
         {
             return 1f;
         }
-        return available / (pageWidth * scale);
+        return available / ((twoPages ? pageWidth * 2 : pageWidth) * scale);
     }
 
     private void FitWidthOnOpen()
@@ -1797,29 +1975,49 @@ public sealed class MainWindow : Form
             return;
         }
         SaveViewState();
-        OpenDocument(_documentPath);
+        OpenDocument(_documentPath, forceReload: true);
     }
 
     private void CloseCurrentDocument()
+    {
+        CloseTab(_activeSessionIndex);
+    }
+
+    private void ShowViewModeMenu()
     {
         if (_document is null)
         {
             return;
         }
-        SaveViewState();
-        var closing = _document;
-        _document = null;
-        _documentPath = null;
-        _linkHoverPreview = null;
-        _viewer.SetDocument(null);
-        _viewer.Visible = false;
-        _welcomeView.Visible = true;
-        _sidePanel.SetDocument(null);
-        _sidePanel.Visible = false;
-        _engine.CloseDocument(closing);
+        var mode = _viewer.LayoutMode;
+        var menu = ThemedContextMenu.Create(
+            new ContextMenuItem(Strings.Get("ViewContinuous"), () => SetViewMode(PageLayoutMode.Continuous), mode == PageLayoutMode.Continuous ? IconKind.Check : IconKind.ContinuousPage),
+            new ContextMenuItem(Strings.Get("ViewSinglePage"), () => SetViewMode(PageLayoutMode.SinglePage), mode == PageLayoutMode.SinglePage ? IconKind.Check : IconKind.SinglePage),
+            new ContextMenuItem(Strings.Get("ViewTwoPages"), () => SetViewMode(PageLayoutMode.TwoPage), mode == PageLayoutMode.TwoPage ? IconKind.Check : IconKind.TwoPages));
+        var anchor = _viewModeButton.PointToScreen(new Point(0, _viewModeButton.Height));
+        menu.Show(anchor);
+    }
+
+    private void SetViewMode(PageLayoutMode mode)
+    {
+        _viewer.SetLayoutMode(mode);
+        if (!_userZoomed && !_fitPageActive)
+        {
+            RefitWidth();
+        }
         SyncScrollBar();
         UpdateCommandStates();
         UpdateStatus();
+    }
+
+    private void ToggleDarkPageMode()
+    {
+        if (_document is null)
+        {
+            return;
+        }
+        _viewer.SetDarkPageMode(!_viewer.DarkPageMode);
+        UpdateCommandStates();
     }
 
     private void ShowDocumentProperties()
@@ -1915,6 +2113,8 @@ public sealed class MainWindow : Form
         _wholeWordButton.AccessibleName = Strings.Get("WholeWord");
         _printButton.AccessibleName = Strings.Get("Print");
         _settingsButton.AccessibleName = Strings.Get("Settings");
+        _viewModeButton.AccessibleName = Strings.Get("ViewMode");
+        _darkPageButton.AccessibleName = Strings.Get("DarkPageMode");
 
         _welcomeView.RefreshLocalization();
         _sidePanel.Invalidate();
@@ -1974,8 +2174,12 @@ public sealed class MainWindow : Form
         _pageJumpField.BackColor = Theme.Canvas;
         _pageJumpField.ForeColor = Theme.Text;
         _handToolButton.Invalidate();
+        _viewModeButton.Invalidate();
+        _darkPageButton.Invalidate();
         _printButton.Invalidate();
         _settingsButton.Invalidate();
+        _tabStrip.BackColor = Theme.Bg;
+        _tabStrip.Invalidate();
         _titleIconBox.Invalidate();
 
         foreach (Control control in _toolbar.Controls)
@@ -2044,6 +2248,15 @@ public sealed class MainWindow : Form
         _zoomOutButton.Enabled = hasDocument;
         _fitWidthButton.Enabled = hasDocument;
         _fitPageButton.Enabled = hasDocument;
+        _viewModeButton.Enabled = hasDocument;
+        _viewModeButton.Icon = _viewer.LayoutMode switch
+        {
+            PageLayoutMode.SinglePage => IconKind.SinglePage,
+            PageLayoutMode.TwoPage => IconKind.TwoPages,
+            _ => IconKind.ContinuousPage,
+        };
+        _darkPageButton.Enabled = hasDocument;
+        _darkPageButton.IsActive = hasDocument && _viewer.DarkPageMode;
         _rotateLeftButton.Enabled = hasDocument;
         _rotateRightButton.Enabled = hasDocument;
         _handToolButton.Enabled = hasDocument;
@@ -2292,6 +2505,10 @@ public sealed class MainWindow : Form
                 ToggleHandTool();
                 e.Handled = true;
                 break;
+            case Keys.N when e.Alt:
+                ToggleDarkPageMode();
+                e.Handled = true;
+                break;
             case Keys.F4:
                 ToggleSidePanel();
                 e.Handled = true;
@@ -2305,7 +2522,14 @@ public sealed class MainWindow : Form
                 e.Handled = true;
                 break;
             case Keys.W when e.Control:
-                Close();
+                if (_sessions.Count > 0)
+                {
+                    CloseTab(_activeSessionIndex);
+                }
+                else
+                {
+                    Close();
+                }
                 e.Handled = true;
                 break;
             case Keys.Escape when WindowState == FormWindowState.Maximized:
@@ -2317,6 +2541,16 @@ public sealed class MainWindow : Form
                 e.Handled = true;
                 break;
         }
+    }
+
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (keyData == (Keys.Control | Keys.Tab) && _sessions.Count > 1)
+        {
+            ActivateSession((_activeSessionIndex + 1) % _sessions.Count);
+            return true;
+        }
+        return base.ProcessCmdKey(ref msg, keyData);
     }
 
     private bool _userZoomed;
@@ -2434,6 +2668,7 @@ public sealed class MainWindow : Form
         _hScrollBar.Height = Math.Max(8, (int)Math.Round(10 * scale));
         _titleBar.Height = (int)Math.Round(TitleBarHeight * scale);
         _titleIconBox.Width = (int)Math.Round(28 * scale);
+        _tabStrip.Height = (int)Math.Round(32 * scale);
         _toolbar.Height = (int)Math.Round(ToolbarHeight * scale);
         _settingsButton.Width = (int)Math.Round(42 * scale);
         _statusBar.Height = (int)Math.Round(StatusBarHeight * scale);
@@ -2559,6 +2794,12 @@ public sealed class MainWindow : Form
             SaveViewState();
             PersistWindowBounds();
         }
+        foreach (var session in _sessions)
+        {
+            _engine.CloseDocument(session.Document);
+        }
+        _sessions.Clear();
+        _document = null;
         _toolTip?.Dispose();
         if (_resizeFilter is not null)
         {
@@ -2686,5 +2927,32 @@ public sealed class MainWindow : Form
             if (bottom) return 15;          // HTBOTTOM
             return 0;
         }
+    }
+
+    private sealed class DocumentSession
+    {
+        public required PdfDocument Document { get; init; }
+
+        public required string FilePath { get; set; }
+
+        public float Zoom { get; set; } = 1f;
+
+        public int Rotation { get; set; }
+
+        public int ScrollX { get; set; }
+
+        public int ScrollY { get; set; }
+
+        public bool UserZoomed { get; set; }
+
+        public bool FitPageActive { get; set; }
+
+        public bool SidePanelOpen { get; set; }
+
+        public int SidePanelTab { get; set; }
+
+        public PageLayoutMode LayoutMode { get; set; } = PageLayoutMode.Continuous;
+
+        public bool DarkPageMode { get; set; }
     }
 }

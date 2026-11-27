@@ -14,6 +14,8 @@ namespace CyberPDF.Core.Documents;
 /// </remarks>
 public sealed class PdfDocument : IDisposable
 {
+    private static long _nextId;
+
     private readonly SafePdfDocument _document;
     private readonly FileStream? _stream;
     private readonly PageSize[] _sizes;
@@ -21,6 +23,7 @@ public sealed class PdfDocument : IDisposable
 
     private PdfDocument(SafePdfDocument document, FileStream? stream, PageSize[] sizes, string? path, string? title, uint permissions)
     {
+        Id = Interlocked.Increment(ref _nextId);
         _document = document;
         _stream = stream;
         _sizes = sizes;
@@ -28,6 +31,9 @@ public sealed class PdfDocument : IDisposable
         Title = title;
         Permissions = permissions;
     }
+
+    /// <summary>Process-unique document identifier used to scope cached renders.</summary>
+    public long Id { get; }
 
     /// <summary>Full path of the open file, or null when loaded from memory.</summary>
     public string? FilePath { get; }

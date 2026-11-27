@@ -16,6 +16,7 @@ public static class Theme
         string Surface,
         string SurfaceAlt,
         string Canvas,
+        string DarkPaper,
         string PageShadow,
         string PageBorder,
         string Text,
@@ -42,6 +43,7 @@ public static class Theme
             Surface: "#111823",
             SurfaceAlt: "#18212E",
             Canvas: "#080B10",
+            DarkPaper: "#1A1D22",
             PageShadow: "#2E000000",
             PageBorder: "#2A3A4D",
             Text: "#EDF3FA",
@@ -66,6 +68,7 @@ public static class Theme
             Surface: "#1D1D20",
             SurfaceAlt: "#252529",
             Canvas: "#121214",
+            DarkPaper: "#1E1E22",
             PageShadow: "#2E000000",
             PageBorder: "#3A3A42",
             Text: "#ECECEF",
@@ -90,6 +93,7 @@ public static class Theme
             Surface: "#FBF9F5",
             SurfaceAlt: "#EFEBE4",
             Canvas: "#E8E4DC",
+            DarkPaper: "#1F1E1C",
             PageShadow: "#28000000",
             PageBorder: "#C6BFB4",
             Text: "#1C1A17",
@@ -178,6 +182,9 @@ public static class Theme
 
     /// <summary>Paper color. Always white, in every theme: it is the document.</summary>
     public static Color Paper => Color.White;
+
+    /// <summary>Inverted paper color when dark reading filter is active.</summary>
+    public static Color DarkPaper => FromHex(Current.DarkPaper);
 
     private static Color FromHex(string hex)
     {

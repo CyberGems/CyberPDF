@@ -102,6 +102,13 @@ public static class Strings
         ["PropPageDimensions"] = ("Page size", "Tamaño de página"),
         ["PropNone"] = ("(none)", "(ninguno)"),
         ["GoToPageNumber"] = ("Go to page {0}", "Ir a página {0}"),
+        ["ViewMode"] = ("View mode", "Modo de vista"),
+        ["ViewContinuous"] = ("Continuous", "Continuo"),
+        ["ViewSinglePage"] = ("Single page", "Página única"),
+        ["ViewTwoPages"] = ("Two pages", "Dos páginas"),
+        ["DarkPageMode"] = ("Dark page mode", "Modo nocturno de página"),
+        ["NewTab"] = ("Open another PDF", "Abrir otro PDF"),
+        ["CloseTab"] = ("Close tab", "Cerrar pestaña"),
 
         // Search
         ["Search"] = ("Search", "Buscar"),

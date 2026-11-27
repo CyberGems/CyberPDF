@@ -17,34 +17,43 @@ CyberPDF; el zip portátil es una carpeta que descomprimes y ejecutas.
 
 ## Estado
 
-Fase 0: un lector funcional. Abre un PDF, lo muestra de forma continua, permite
-desplazarse, hacer zoom y girar, selecciona y copia texto, y busca con resaltado,
-con tres temas e interfaz en dos idiomas. Pestañas, miniaturas, marcadores e
-impresión todavía no están implementados.
+Lector activo con tres temas y dos idiomas. Abre varios PDF en pestañas,
+renderiza en modos continuo, página única o dos páginas, se desplaza en
+vertical y horizontal, hace zoom y gira, selecciona y copia texto, abre enlaces
+internos y externos, busca con resaltado, imprime y recuerda el estado por
+documento.
 
 ## Qué funciona hoy
 
-- Abre un documento con el diálogo, arrastrando un archivo o desde la línea de
-  comandos
-- Desplazamiento vertical continuo con barra temática, rueda del ratón, teclado y
-  arrastre con el botón central
+- Pantalla de inicio con lista de documentos recientes y soporte de arrastrar y
+  soltar
+- Múltiples documentos abiertos en pestañas (`Ctrl+Tab` para cambiar, `Ctrl+W`
+  para cerrar pestaña)
+- Abre documentos desde el diálogo, arrastrando o por línea de comandos, con
+  diálogo temático de contraseña para archivos protegidos
+- Modos de lectura continuo, página única y dos páginas, más un filtro nocturno
+  opcional (`Alt+N`)
+- Desplazamiento vertical y horizontal con barras temáticas, rueda del ratón
+  (`Ctrl+Rueda` para zoom, `Shift+Rueda` en horizontal), teclado, botón central
+  y herramienta mano (`Alt+H`)
 - Selecciona y copia texto: arrastra, doble clic para una palabra, triple clic
-  para una línea
-- Busca en todo el documento con cada coincidencia resaltada y la activa en un
-  color más fuerte; `Ctrl+F` abre la barra, `Enter` y `Shift+Enter` recorren las
-  coincidencias
-- Panel lateral con miniaturas de las páginas y los marcadores del documento,
-  `F4` para mostrarlo y arrastra su borde para cambiar el ancho; haz clic en
-  cualquiera para saltar a esa página
-- El panel, su pestaña y su ancho vuelven en el siguiente inicio, igual que el tema
-- Una sola ventana por sesión: abrir un segundo PDF lo entrega a la ventana activa
-- Zoom de 10% a 800%, ajustar al ancho, ajustar la página completa, volver al 100%
-- Rotación en pasos de 90 grados
-- Tres temas: Predeterminado, Gris y Claro
-- Interfaz en inglés y español
-- Recuerda la última página, el zoom y la rotación de cada documento, y los
-  archivos recientes
-- Detecta documentos protegidos con contraseña y lo informa
+  para una línea, con menús contextuales temáticos con iconos
+- Enlaces clicables dentro del PDF (saltos internos de página y enlaces web o
+  mailto)
+- Búsqueda en todo el documento con opciones de mayúsculas y palabra completa;
+  `Ctrl+F` abre la barra, `Enter` y `Shift+Enter` recorren las coincidencias
+- Panel lateral con miniaturas y marcadores del documento (`F4`), borde
+  redimensionable y estado recordado por documento
+- Barra de estado interactiva: página anterior/siguiente, clic en el contador
+  (`Ctrl+G`) para ir a cualquier página y clic en el zoom para ajustes rápidos
+- Impresión (`Ctrl+P`), propiedades del documento (`Ctrl+D`) y recarga (`F5`)
+- Zoom de 10% a 800%, ajustar al ancho, ajustar página completa, volver al 100%
+  y rotación en pasos de 90 grados
+- Tres temas (Predeterminado, Gris y Claro) y cambio de idioma español/inglés
+  en vivo desde Ajustes
+- Una sola ventana por sesión: abrir un segundo PDF lo abre en una nueva pestaña
+  de la ventana activa
+- Recuerda el tamaño de ventana, última página, zoom y rotación por documento
 
 ## Por qué es rápido
 
@@ -123,22 +132,29 @@ CyberPDF.exe --shot salida.png documento.pdf
 | Teclas | Acción |
 |---|---|
 | `Ctrl+O` | Abrir un documento |
-| `Ctrl++` / `Ctrl+-` | Acercar / alejar |
+| `Ctrl++` / `Ctrl+-` / `Ctrl+Rueda` | Acercar / alejar |
 | `Ctrl+0` | Tamaño real |
 | `Ctrl+R` | Girar en sentido horario |
 | `Alt+R` | Girar en sentido antihorario |
 | `Alt+W` | Ajustar al ancho |
 | `Alt+P` | Ajustar página completa |
+| `Alt+H` | Alternar herramienta mano / selección |
+| `Alt+N` | Alternar modo nocturno de página |
 | `Alt+T` | Cambiar tema |
 | `Ctrl+F` | Buscar en el documento |
+| `Ctrl+G` | Ir a página |
+| `Ctrl+P` | Imprimir |
+| `Ctrl+D` | Propiedades del documento |
 | `F4` | Miniaturas y marcadores |
+| `F5` | Recargar documento |
 | `F3` | Siguiente coincidencia |
 | `Shift+F3` | Coincidencia anterior |
 | `Ctrl+C` | Copiar la selección |
 | `Ctrl+A` | Seleccionar la página actual |
-| `Ctrl+W` | Cerrar |
+| `Ctrl+Tab` | Siguiente pestaña abierta |
+| `Ctrl+W` | Cerrar pestaña activa o ventana |
 | `F11` | Maximizar / restaurar |
-| `Av Pág` / `Re Pág` | Desplazar una pantalla |
+| `Av Pág` / `Re Pág` | Desplazar una pantalla o cambiar de página |
 | `Inicio` / `Fin` | Principio / final del documento |
 
 ## Licencia

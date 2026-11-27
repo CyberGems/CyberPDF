@@ -316,7 +316,7 @@ public sealed class PdfEngine : IDisposable
             _fullPixelHeight = fullPixelHeight > 0 ? fullPixelHeight : pixelHeight;
         }
 
-        private CacheKey Key => new(_pageIndex, _pixelWidth, _pixelHeight, _rotation, _tileOffsetY, _fullPixelHeight);
+        private CacheKey Key => new(_pageIndex, _pixelWidth, _pixelHeight, _rotation, _tileOffsetY, _fullPixelHeight, _document.Id);
 
         public override void Run(PdfEngine engine)
         {

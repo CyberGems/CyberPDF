@@ -116,10 +116,23 @@ public sealed class PageBitmapCache : IDisposable
     /// <summary>Drops every cached page belonging to a document being closed.</summary>
     public void RemovePagesOf(Documents.PdfDocument document)
     {
-        // Cache keys are page indices, not document identities: a document swap
-        // has to drop everything or page 3 of one file would serve page 3 of the
-        // next. That is cheap and always correct.
-        Clear();
+        if (document is null)
+        {
+            Clear();
+            return;
+        }
+        lock (_lock)
+        {
+            var doomed = _map.Where(kv => kv.Key.DocumentId == document.Id).Select(kv => kv.Key).ToList();
+            foreach (var key in doomed)
+            {
+                var node = _map[key];
+                _lru.Remove(node);
+                _map.Remove(key);
+                _currentBytes -= node.Value.Page.ByteSize;
+                node.Value.Page.Dispose();
+            }
+        }
     }
 
     public void Clear()
@@ -163,4 +176,5 @@ public readonly record struct CacheKey(
     int PixelHeight,
     int Rotation,
     int OffsetY = 0,
-    int FullPixelHeight = 0);
+    int FullPixelHeight = 0,
+    long DocumentId = 0);
