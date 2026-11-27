@@ -55,7 +55,7 @@ public sealed class PageViewer : Control
     /// slow the common case down for no benefit.
     /// </summary>
     private readonly Dictionary<int, PageTextLayer> _textLayers = new();
-    private readonly HashSet<int> _textInFlight = new();
+    private readonly Dictionary<int, List<Action>> _textInFlight = new();
     private readonly Dictionary<int, PageLinkLayer> _linkLayers = new();
     private readonly HashSet<int> _linksInFlight = new();
     private PdfLink? _hoveredLink;
@@ -79,19 +79,22 @@ public sealed class PageViewer : Control
     private int _scrollX;
     private int _scrollY;
     private Point _mouseDownPoint;
+    private Point _lastDragPoint;
     private Point _panStartPoint;
     private bool _panning;
+    private bool _panMoved;
     private int _panStartScrollX;
     private int _panStartScrollY;
     private bool _selecting;
     private bool _selectionMoved;
     private int _selectionAnchorPage;
     private int _selectionAnchorChar = -1;
+    private int _selectionSequence;
     private long _lastClickTick;
     private Point _lastClickPoint;
     private int _clickCount;
     private int _lastDpi = -1;
-    private ViewerTool _activeTool = ViewerTool.Select;
+    private ViewerTool _activeTool = ViewerTool.Pan;
     private PageLayoutMode _layoutMode = PageLayoutMode.Continuous;
     private bool _darkPageMode;
     private ImageAttributes? _darkImageAttributes;
@@ -204,6 +207,7 @@ public sealed class PageViewer : Control
         }
         _textLayers.Clear();
         _textInFlight.Clear();
+        _selectionSequence++;
         _linkLayers.Clear();
         _linksInFlight.Clear();
         _hoveredLink = null;
@@ -238,6 +242,7 @@ public sealed class PageViewer : Control
         ResetTiles();
         _textLayers.Clear();
         _textInFlight.Clear();
+        _selectionSequence++;
         _linkLayers.Clear();
         _linksInFlight.Clear();
         _hoveredLink = null;
@@ -408,6 +413,7 @@ public sealed class PageViewer : Control
             return;
         }
         _selection = null;
+        _highlightCache.Clear();
         Invalidate();
         SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -721,14 +727,17 @@ public sealed class PageViewer : Control
             continuation();
             return;
         }
-        if (_textInFlight.Contains(pageIndex))
+        if (_textInFlight.TryGetValue(pageIndex, out var waiters))
         {
+            waiters.Add(continuation);
             return;
         }
 
-        _textInFlight.Add(pageIndex);
+        var doc = _document;
+        var queue = new List<Action> { continuation };
+        _textInFlight[pageIndex] = queue;
         _engine.GetTextLayer(
-            _document,
+            doc,
             pageIndex,
             layer =>
             {
@@ -740,9 +749,23 @@ public sealed class PageViewer : Control
                 {
                     BeginInvoke(() =>
                     {
-                        _textInFlight.Remove(pageIndex);
-                        _textLayers[pageIndex] = layer;
-                        continuation();
+                        if (doc != _document)
+                        {
+                            return;
+                        }
+
+                        if (_textInFlight.Remove(pageIndex, out var pending))
+                        {
+                            _textLayers[pageIndex] = layer;
+                            foreach (var callback in pending)
+                            {
+                                callback();
+                            }
+                        }
+                        else
+                        {
+                            _textLayers[pageIndex] = layer;
+                        }
 
                         // A newer query may have arrived while this page was
                         // extracting; its request was dropped as a duplicate,
@@ -766,7 +789,13 @@ public sealed class PageViewer : Control
                 }
                 try
                 {
-                    BeginInvoke(() => _textInFlight.Remove(pageIndex));
+                    BeginInvoke(() =>
+                    {
+                        if (doc == _document)
+                        {
+                            _textInFlight.Remove(pageIndex);
+                        }
+                    });
                 }
                 catch (InvalidOperationException)
                 {
@@ -777,6 +806,7 @@ public sealed class PageViewer : Control
     private void SetSelection(TextSelection selection)
     {
         _selection = selection;
+        _highlightCache.Clear();
         Invalidate();
         SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -1311,7 +1341,7 @@ public sealed class PageViewer : Control
         var size = _document.GetPageSize(slot.PageIndex);
         var transform = new PageTransform(size, slot.Width, slot.Height, _rotation);
 
-        using var brush = new SolidBrush(Theme.Selection);
+        using var brush = new SolidBrush(Theme.PageSelection);
         foreach (var rect in rects)
         {
             // Map opposite corners and normalize: a rotated page swaps which one
@@ -1400,6 +1430,7 @@ public sealed class PageViewer : Control
         if (e.Button == MouseButtons.Middle || (e.Button == MouseButtons.Left && _activeTool == ViewerTool.Pan))
         {
             _panning = true;
+            _panMoved = false;
             _panStartPoint = e.Location;
             _panStartScrollX = _scrollX;
             _panStartScrollY = _scrollY;
@@ -1424,20 +1455,31 @@ public sealed class PageViewer : Control
         var hit = HitTestPdfPoint(e.Location);
         if (hit is not var (pageIndex, pdfX, pdfY))
         {
+            _selectionSequence++;
             ClearSelection();
             return;
         }
+
+        var seq = ++_selectionSequence;
 
         if (_clickCount == 2)
         {
             EnsureTextLayer(pageIndex, () =>
             {
+                if (seq != _selectionSequence)
+                {
+                    return;
+                }
                 if (_textLayers.TryGetValue(pageIndex, out var layer))
                 {
-                    var index = TextSelectionEngine.ClosestCharacterIndex(layer, pdfX, pdfY);
+                    var index = TextSelectionEngine.ClosestCharacterIndex(layer, pdfX, pdfY, maxDistance: 24);
                     if (index >= 0)
                     {
                         SetSelection(TextSelectionEngine.SelectWordAt(layer, index, pageIndex));
+                    }
+                    else
+                    {
+                        ClearSelection();
                     }
                 }
             });
@@ -1448,12 +1490,20 @@ public sealed class PageViewer : Control
         {
             EnsureTextLayer(pageIndex, () =>
             {
+                if (seq != _selectionSequence)
+                {
+                    return;
+                }
                 if (_textLayers.TryGetValue(pageIndex, out var layer))
                 {
-                    var index = TextSelectionEngine.ClosestCharacterIndex(layer, pdfX, pdfY);
+                    var index = TextSelectionEngine.ClosestCharacterIndex(layer, pdfX, pdfY, maxDistance: 24);
                     if (index >= 0)
                     {
                         SetSelection(TextSelectionEngine.SelectLineAt(layer, index, pageIndex));
+                    }
+                    else
+                    {
+                        ClearSelection();
                     }
                 }
             });
@@ -1465,16 +1515,21 @@ public sealed class PageViewer : Control
         _selectionAnchorPage = pageIndex;
         _selectionAnchorChar = -1;
         _mouseDownPoint = e.Location;
+        _lastDragPoint = e.Location;
         Capture = true;
 
         EnsureTextLayer(pageIndex, () =>
         {
+            if (seq != _selectionSequence)
+            {
+                return;
+            }
             if (_textLayers.TryGetValue(pageIndex, out var layer))
             {
                 _selectionAnchorChar = TextSelectionEngine.ClosestCharacterIndex(layer, pdfX, pdfY);
-                if (_selecting && _selectionMoved && _selectionAnchorChar >= 0)
+                if (_selectionMoved && _selectionAnchorChar >= 0)
                 {
-                    UpdateDragSelection(PointToClient(Cursor.Position));
+                    UpdateDragSelection(_selecting ? PointToClient(Cursor.Position) : _lastDragPoint);
                 }
             }
         });
@@ -1485,6 +1540,11 @@ public sealed class PageViewer : Control
         base.OnMouseMove(e);
         if (_panning)
         {
+            if (!_panMoved
+                && (Math.Abs(e.X - _panStartPoint.X) >= 3 || Math.Abs(e.Y - _panStartPoint.Y) >= 3))
+            {
+                _panMoved = true;
+            }
             ScrollTo(_panStartScrollY + (_panStartPoint.Y - e.Y));
             ScrollHorizontalTo(_panStartScrollX + (_panStartPoint.X - e.X));
             return;
@@ -1492,6 +1552,7 @@ public sealed class PageViewer : Control
 
         if (_selecting)
         {
+            _lastDragPoint = e.Location;
             if (!_selectionMoved
                 && (Math.Abs(e.X - _mouseDownPoint.X) >= 3 || Math.Abs(e.Y - _mouseDownPoint.Y) >= 3))
             {
@@ -1512,19 +1573,26 @@ public sealed class PageViewer : Control
         base.OnMouseUp(e);
         if (_panning && e.Button is MouseButtons.Middle or MouseButtons.Left)
         {
+            var clickedWithoutPan = e.Button == MouseButtons.Left && !_panMoved;
             _panning = false;
             Capture = false;
+            if (clickedWithoutPan)
+            {
+                TryActivateLink(e.Location);
+            }
             UpdateHoverCursor(e.Location);
             return;
         }
 
         if (_selecting && e.Button == MouseButtons.Left)
         {
+            _lastDragPoint = e.Location;
             var moved = _selectionMoved;
             _selecting = false;
             Capture = false;
             if (!moved && _clickCount == 1)
             {
+                _selectionSequence++;
                 ClearSelection();
                 if (TryActivateLink(e.Location))
                 {
@@ -1697,7 +1765,7 @@ public sealed class PageViewer : Control
         }
         if (_activeTool == ViewerTool.Pan)
         {
-            SetHoveredLink(null);
+            SetHoveredLink(HitTestLink(location));
             Cursor = Cursors.Hand;
             return;
         }
@@ -1708,7 +1776,16 @@ public sealed class PageViewer : Control
             Cursor = Cursors.Hand;
             return;
         }
-        Cursor = HitTestPdfPoint(location) is not null ? Cursors.IBeam : Cursors.Default;
+        if (HitTestPdfPoint(location) is var (hoverPage, _, _))
+        {
+            if (!_textLayers.ContainsKey(hoverPage))
+            {
+                EnsureTextLayer(hoverPage, static () => { });
+            }
+            Cursor = Cursors.IBeam;
+            return;
+        }
+        Cursor = Cursors.Default;
     }
 
     protected override void OnMouseClick(MouseEventArgs e)

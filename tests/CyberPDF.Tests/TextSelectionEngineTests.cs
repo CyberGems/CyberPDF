@@ -132,4 +132,55 @@ public sealed class TextSelectionEngineTests
         Assert.True(a.Overlaps(b));
         Assert.False(a.Overlaps(otherPage));
     }
+
+    [Fact]
+    public void ClosestCharacterIndexPastShortLineStaysOnThatLineOverWiderLineBelow()
+    {
+        var chars = new List<TextCharacter>();
+        var idx = 0;
+        // Short line 1: x=10..40, y=80..92
+        for (var i = 0; i < 3; i++)
+        {
+            chars.Add(new TextCharacter(idx++, 'A' + i, 10 + i * 10, 20 + i * 10, 80, 92));
+        }
+        // Wide line 2: x=10..180, y=62..74 (closer in raw Euclidean distance to x=150, y=79 than line 1 at x=40!)
+        for (var i = 0; i < 17; i++)
+        {
+            chars.Add(new TextCharacter(idx++, 'a' + i, 10 + i * 10, 20 + i * 10, 62, 74));
+        }
+        var layer = PageTextLayer.Create(chars.ToArray(), new PageSize(200, 100));
+
+        // Pointer is within line 1's vertical span (y=85) at x=150: must hit line 1's last char (index 2).
+        var onLine = TextSelectionEngine.ClosestCharacterIndex(layer, 150, 85);
+        Assert.Equal(2, onLine);
+
+        // Pointer slightly below line 1's bottom (y=79) at x=45: line 1 is closer vertically than line 2 (y=74), stay on line 1.
+        var nearLine1 = TextSelectionEngine.ClosestCharacterIndex(layer, 45, 79);
+        Assert.Equal(2, nearLine1);
+    }
+
+    [Fact]
+    public void ClosestCharacterIndexReturnsMinusOneBeyondMaxDistance()
+    {
+        var layer = Layer();
+        var missed = TextSelectionEngine.ClosestCharacterIndex(layer, 150, 20, maxDistance: 24);
+        Assert.Equal(-1, missed);
+    }
+
+    [Fact]
+    public void BuildHighlightRectsCoversOutOfOrderLeftCoordinateOnSameLine()
+    {
+        var chars = new[]
+        {
+            new TextCharacter(0, 'B', 30, 40, 80, 92),
+            new TextCharacter(1, 'A', 15, 25, 80, 92),
+        };
+        var layer = PageTextLayer.Create(chars, new PageSize(200, 100));
+
+        var rects = TextSelectionEngine.BuildHighlightRects(layer, new TextSelection(0, 0, 2));
+
+        var rect = Assert.Single(rects);
+        Assert.Equal(15, rect.Left, 3);
+        Assert.Equal(40, rect.Right, 3);
+    }
 }

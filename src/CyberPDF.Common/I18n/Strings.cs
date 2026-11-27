@@ -58,7 +58,7 @@ public static class Strings
         ["NextPage"] = ("Next page", "Página siguiente"),
         ["ZoomLevel"] = ("Zoom level", "Nivel de zoom"),
         ["HandTool"] = ("Hand tool (pan)", "Herramienta mano (desplazar)"),
-        ["SelectTool"] = ("Select text", "Seleccionar texto"),
+        ["SelectTool"] = ("Select text", "Selección de texto"),
 
         // Errors
         ["ErrorTitle"] = ("Cannot open the document", "No se puede abrir el documento"),

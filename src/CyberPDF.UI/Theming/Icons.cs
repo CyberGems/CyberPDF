@@ -283,10 +283,14 @@ public static class Icons
                 break;
 
             case IconKind.TextCursor:
-                g.DrawLine(pen, 5.2f, 2.8f, 10.8f, 2.8f);
-                g.DrawLine(pen, 8f, 2.8f, 8f, 13.2f);
-                g.DrawLine(pen, 5.2f, 13.2f, 10.8f, 13.2f);
-                g.DrawLine(pen, 6.2f, 8f, 9.8f, 8f);
+                // Framed 'T' badge beside a serifed I-beam so the text tool reads
+                // clearly next to the hand pan button.
+                g.DrawRectangle(pen, 2f, 3.6f, 6.4f, 8.8f);
+                g.DrawLine(pen, 3.6f, 5.8f, 6.8f, 5.8f);
+                g.DrawLine(pen, 5.2f, 5.8f, 5.2f, 10.4f);
+                g.DrawLine(pen, 10.2f, 2.4f, 13.4f, 2.4f);
+                g.DrawLine(pen, 11.8f, 2.4f, 11.8f, 13.6f);
+                g.DrawLine(pen, 10.2f, 13.6f, 13.4f, 13.6f);
                 break;
 
             case IconKind.Reload:

@@ -31,6 +31,7 @@ public static class Theme
         string DangerPressed,
         string DangerText,
         string Selection,
+        string PageSelection,
         string ScrollThumb,
         string ScrollThumbHover,
         string SearchMatch,
@@ -63,6 +64,7 @@ public static class Theme
             DangerPressed: "#A22216",
             DangerText: "#FFFFFF",
             Selection: "#332AA9B8",
+            PageSelection: "#5C2AA9B8",
             ScrollThumb: "#2C3B4C",
             ScrollThumbHover: "#3E536A",
             SearchMatch: "#66E0B341",
@@ -93,6 +95,7 @@ public static class Theme
             DangerPressed: "#A22216",
             DangerText: "#FFFFFF",
             Selection: "#33B4BBC4",
+            PageSelection: "#666C7A89",
             ScrollThumb: "#3A3A42",
             ScrollThumbHover: "#4E4E58",
             SearchMatch: "#66C9A227",
@@ -123,6 +126,7 @@ public static class Theme
             DangerPressed: "#A22216",
             DangerText: "#FFFFFF",
             Selection: "#331F6F7A",
+            PageSelection: "#541F6F7A",
             ScrollThumb: "#C4BCB0",
             ScrollThumbHover: "#A9A093",
             SearchMatch: "#66E8C547",
@@ -185,6 +189,8 @@ public static class Theme
     public static Color DangerText => FromHex(Current.DangerText);
 
     public static Color Selection => FromHex(Current.Selection);
+
+    public static Color PageSelection => FromHex(Current.PageSelection);
 
     public static Color ScrollThumb => FromHex(Current.ScrollThumb);
 

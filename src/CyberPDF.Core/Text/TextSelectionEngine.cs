@@ -83,6 +83,7 @@ public static class TextSelectionEngine
                 }
                 else
                 {
+                    currentLeft = Math.Min(currentLeft.Value, character.Left);
                     currentRight = Math.Max(currentRight, character.Right);
                     currentBottom = Math.Min(currentBottom, character.Bottom);
                     currentTop = Math.Max(currentTop, character.Top);
@@ -214,17 +215,22 @@ public static class TextSelectionEngine
     /// <summary>
     /// Index of the character closest to a point in PDF space, which is how a
     /// drag position becomes a selection endpoint. Returns -1 when the layer is
-    /// empty.
+    /// empty or no glyph is within <paramref name="maxDistance"/> PDF points.
     /// </summary>
-    public static int ClosestCharacterIndex(PageTextLayer layer, double x, double y)
+    public static int ClosestCharacterIndex(PageTextLayer layer, double x, double y, double maxDistance = double.PositiveInfinity)
     {
         if (layer.IsEmpty)
         {
             return -1;
         }
 
-        var best = -1;
-        var bestDistance = double.MaxValue;
+        var maxSq = double.IsFinite(maxDistance) ? maxDistance * maxDistance : double.PositiveInfinity;
+        var bestOnLine = -1;
+        var bestOnLineDx = double.MaxValue;
+        var bestOnLineArea = double.MaxValue;
+        var bestFallback = -1;
+        var bestFallbackScore = double.MaxValue;
+
         foreach (var character in layer.Characters)
         {
             if (character.Width <= 0 && character.Height <= 0)
@@ -237,15 +243,36 @@ public static class TextSelectionEngine
             // first one of the next line.
             var dx = Math.Max(0, Math.Max(character.Left - x, x - character.Right));
             var dy = Math.Max(0, Math.Max(character.Bottom - y, y - character.Top));
-            var distance = dx * dx + dy * dy;
-            if (distance < bestDistance)
+            var rawDistSq = dx * dx + dy * dy;
+            if (rawDistSq > maxSq)
             {
-                bestDistance = distance;
-                best = character.Index;
+                continue;
+            }
+
+            if (dy == 0)
+            {
+                var area = Math.Max(character.Width, 0.01) * Math.Max(character.Height, 0.01);
+                if (dx < bestOnLineDx || (dx == bestOnLineDx && area < bestOnLineArea))
+                {
+                    bestOnLineDx = dx;
+                    bestOnLineArea = area;
+                    bestOnLine = character.Index;
+                }
+                continue;
+            }
+
+            // Strongly prefer staying on the closest visual line horizontally so
+            // dragging into the right margin of a short line does not jump onto
+            // a wider line above or below it.
+            var weighted = dx * dx + (dy * 8.0) * (dy * 8.0);
+            if (weighted < bestFallbackScore)
+            {
+                bestFallbackScore = weighted;
+                bestFallback = character.Index;
             }
         }
 
-        return best;
+        return bestOnLine >= 0 ? bestOnLine : bestFallback;
     }
 
     private static bool SameLine(in TextCharacter a, in TextCharacter b)

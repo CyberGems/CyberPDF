@@ -55,6 +55,7 @@ public sealed class MainWindow : Form
     private readonly ToolButton _rotateLeftButton = new();
     private readonly ToolButton _rotateRightButton = new();
     private readonly ToolButton _handToolButton = new();
+    private readonly ToolButton _selectToolButton = new();
     private readonly ToolButton _themeButton = new();
     private readonly ToolButton _copyButton = new();
     private readonly ToolButton _highlightButton = new();
@@ -286,7 +287,10 @@ public sealed class MainWindow : Form
         ConfigureButton(_darkPageButton, IconKind.InvertColors, null, ToggleDarkPageMode);
         ConfigureButton(_rotateLeftButton, IconKind.RotateLeft, null, () => Rotate(-90));
         ConfigureButton(_rotateRightButton, IconKind.RotateRight, null, () => Rotate(90));
-        ConfigureButton(_handToolButton, IconKind.Hand, null, ToggleHandTool);
+        ConfigureButton(_handToolButton, IconKind.Hand, null, () => SetActiveTool(ViewerTool.Pan));
+        _handToolButton.AccessibleName = Strings.Get("HandTool");
+        ConfigureButton(_selectToolButton, IconKind.TextCursor, null, () => SetActiveTool(ViewerTool.Select));
+        _selectToolButton.AccessibleName = Strings.Get("SelectTool");
         ConfigureButton(_copyButton, IconKind.Copy, Strings.Get("Copy"), CopySelection);
         _copyButton.Enabled = false;
         ConfigureButton(_highlightButton, IconKind.Highlight, null, OnHighlightButtonClick);
@@ -324,7 +328,10 @@ public sealed class MainWindow : Form
         flow.Controls.Add(Separator());
         flow.Controls.Add(_rotateLeftButton);
         flow.Controls.Add(_rotateRightButton);
+        flow.Controls.Add(Separator());
         flow.Controls.Add(_handToolButton);
+        flow.Controls.Add(_selectToolButton);
+        flow.Controls.Add(Separator());
         flow.Controls.Add(_copyButton);
         flow.Controls.Add(_highlightButton);
         flow.Controls.Add(_bookmarkButton);
@@ -1014,7 +1021,8 @@ public sealed class MainWindow : Form
         _toolTip.Attach(_darkPageButton, () => Strings.Get("DarkPageMode"), () => "Alt+N");
         _toolTip.Attach(_rotateLeftButton, () => Strings.Get("RotateLeft"), () => "Alt+R");
         _toolTip.Attach(_rotateRightButton, () => Strings.Get("RotateRight"), () => "Ctrl+R");
-        _toolTip.Attach(_handToolButton, () => _viewer.ActiveTool == ViewerTool.Pan ? Strings.Get("SelectTool") : Strings.Get("HandTool"), () => "Alt+H");
+        _toolTip.Attach(_handToolButton, () => Strings.Get("HandTool"), () => "Alt+H");
+        _toolTip.Attach(_selectToolButton, () => Strings.Get("SelectTool"), () => "Alt+S");
         _toolTip.Attach(_copyButton, () => Strings.Get("Copy"), () => "Ctrl+C");
         _toolTip.Attach(_highlightButton, () => $"{Strings.Get("Highlight")} ({GetHighlightColorName(_settings.HighlightColor)})", () => "Alt+M");
         _toolTip.Attach(_bookmarkButton, () => IsCurrentPageBookmarked() ? Strings.Get("RemoveBookmark") : Strings.Get("AddBookmark"), () => "Ctrl+B");
@@ -2274,12 +2282,12 @@ public sealed class MainWindow : Form
         SaveViewState();
     }
 
-    private void ToggleHandTool()
+    private void SetActiveTool(ViewerTool tool)
     {
-        _viewer.ActiveTool = _viewer.ActiveTool == ViewerTool.Pan
-            ? ViewerTool.Select
-            : ViewerTool.Pan;
-        _handToolButton.IsActive = _document is not null && _viewer.ActiveTool == ViewerTool.Pan;
+        _viewer.ActiveTool = tool;
+        var hasDoc = _document is not null && !_showingStartTab;
+        _handToolButton.IsActive = hasDoc && tool == ViewerTool.Pan;
+        _selectToolButton.IsActive = hasDoc && tool == ViewerTool.Select;
     }
 
     private void GoToPage(int pageIndex)
@@ -2558,6 +2566,8 @@ public sealed class MainWindow : Form
         _darkPageButton.AccessibleName = Strings.Get("DarkPageMode");
         _highlightButton.AccessibleName = Strings.Get("Highlight");
         _bookmarkButton.AccessibleName = Strings.Get("ToggleBookmark");
+        _handToolButton.AccessibleName = Strings.Get("HandTool");
+        _selectToolButton.AccessibleName = Strings.Get("SelectTool");
 
         _welcomeView.RefreshLocalization();
         _sidePanel.Invalidate();
@@ -2619,6 +2629,7 @@ public sealed class MainWindow : Form
         _pageJumpField.BackColor = Theme.Canvas;
         _pageJumpField.ForeColor = Theme.Text;
         _handToolButton.Invalidate();
+        _selectToolButton.Invalidate();
         _viewModeButton.Invalidate();
         _darkPageButton.Invalidate();
         _printButton.Invalidate();
@@ -2706,6 +2717,8 @@ public sealed class MainWindow : Form
         _rotateRightButton.Enabled = hasDocument;
         _handToolButton.Enabled = hasDocument;
         _handToolButton.IsActive = hasDocument && _viewer.ActiveTool == ViewerTool.Pan;
+        _selectToolButton.Enabled = hasDocument;
+        _selectToolButton.IsActive = hasDocument && _viewer.ActiveTool == ViewerTool.Select;
         _copyButton.Enabled = hasDocument && _viewer.HasSelection;
         _highlightButton.Enabled = hasDocument;
         _bookmarkButton.Enabled = hasDocument;
@@ -2986,7 +2999,11 @@ public sealed class MainWindow : Form
                 e.Handled = true;
                 break;
             case Keys.H when e.Alt:
-                ToggleHandTool();
+                SetActiveTool(ViewerTool.Pan);
+                e.Handled = true;
+                break;
+            case Keys.S when e.Alt:
+                SetActiveTool(ViewerTool.Select);
                 e.Handled = true;
                 break;
             case Keys.N when e.Alt:
