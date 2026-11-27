@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using CyberPDF.Common.Shell;
 using Microsoft.Win32;
 
 namespace CyberPDF.UI.Services;
@@ -20,7 +21,7 @@ public enum DefaultPdfResult
 /// </summary>
 public static class PdfAssociationService
 {
-    public const string ProgId = "CyberPDF.Document";
+    public const string ProgId = PdfAssociationHelper.ProgId;
     private const string RegisteredAppName = "CyberPDF";
     private const string CapabilitiesSubkey = @"Software\CyberGems\CyberPDF\Capabilities";
 
@@ -39,33 +40,12 @@ public static class PdfAssociationService
     {
         try
         {
-            var progId = QueryAssociation(AssocstrProgId);
-            if (string.Equals(progId, ProgId, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            var currentExe = NormalizePath(Environment.ProcessPath);
-            var associatedExe = NormalizePath(QueryAssociation(AssocstrExecutable));
-            if (!string.IsNullOrEmpty(currentExe) &&
-                string.Equals(associatedExe, currentExe, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            var userChoice = ReadUserChoiceProgId();
-            if (!string.IsNullOrEmpty(userChoice))
-            {
-                return string.Equals(userChoice, ProgId, StringComparison.OrdinalIgnoreCase);
-            }
-
-            // Last check for environments where AssocQueryString did not resolve UserChoice.
-            var command = QueryAssociation(AssocstrCommand);
-            if (!string.IsNullOrEmpty(currentExe) &&
-                command.Contains(currentExe, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
+            return PdfAssociationHelper.MatchesDefaultHandler(
+                QueryAssociation(AssocstrProgId),
+                QueryAssociation(AssocstrExecutable),
+                ReadUserChoiceProgId(),
+                QueryAssociation(AssocstrCommand),
+                Environment.ProcessPath);
         }
         catch (Exception ex) when (ex is SystemException or UnauthorizedAccessException)
         {
@@ -81,13 +61,15 @@ public static class PdfAssociationService
     /// </summary>
     public static void RegisterCurrentExecutable(string? executablePath = null, bool claimFallbackClass = true)
     {
-        var exePath = NormalizePath(executablePath ?? Environment.ProcessPath);
+        var exePath = PdfAssociationHelper.NormalizeExecutablePath(executablePath ?? Environment.ProcessPath);
         if (string.IsNullOrEmpty(exePath))
         {
             return;
         }
 
         var exeName = Path.GetFileName(exePath);
+        var openCommand = PdfAssociationHelper.BuildOpenCommand(exePath);
+        var defaultIconValue = PdfAssociationHelper.BuildDefaultIconValue(exePath);
 
         using (var progIdKey = Registry.CurrentUser.CreateSubKey($@"Software\Classes\{ProgId}"))
         {
@@ -95,14 +77,14 @@ public static class PdfAssociationService
             progIdKey?.SetValue("FriendlyTypeName", "PDF document");
 
             using var defaultIcon = progIdKey?.CreateSubKey("DefaultIcon");
-            defaultIcon?.SetValue(string.Empty, $"\"{exePath}\",0");
+            defaultIcon?.SetValue(string.Empty, defaultIconValue);
 
             using var appMeta = progIdKey?.CreateSubKey("Application");
             appMeta?.SetValue("ApplicationName", "CyberPDF");
             appMeta?.SetValue("ApplicationDescription", "Fast, lightweight PDF reader");
 
             using var cmd = progIdKey?.CreateSubKey(@"shell\open\command");
-            cmd?.SetValue(string.Empty, $"\"{exePath}\" \"%1\"");
+            cmd?.SetValue(string.Empty, openCommand);
         }
 
         using (var appKey = Registry.CurrentUser.CreateSubKey($@"Software\Classes\Applications\{exeName}"))
@@ -111,7 +93,7 @@ public static class PdfAssociationService
             using var supported = appKey?.CreateSubKey("SupportedTypes");
             supported?.SetValue(".pdf", string.Empty);
             using var cmd = appKey?.CreateSubKey(@"shell\open\command");
-            cmd?.SetValue(string.Empty, $"\"{exePath}\" \"%1\"");
+            cmd?.SetValue(string.Empty, openCommand);
         }
 
         using (var pdfKey = Registry.CurrentUser.CreateSubKey(@"Software\Classes\.pdf"))
@@ -207,22 +189,6 @@ public static class PdfAssociationService
 
         var length = (int)Math.Min(size, (uint)buffer.Length);
         return new string(buffer, 0, length).TrimEnd('\0');
-    }
-
-    private static string NormalizePath(string? path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            return string.Empty;
-        }
-        try
-        {
-            return Path.GetFullPath(path.Trim().Trim('"'));
-        }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
-        {
-            return path.Trim().Trim('"');
-        }
     }
 
     [DllImport("shlwapi.dll", CharSet = CharSet.Unicode)]

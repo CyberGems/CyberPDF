@@ -79,6 +79,7 @@ public sealed class MainWindow : Form
     private readonly Image? _appIconBitmap;
     private ResizeBorderFilter? _resizeFilter;
     private ThemedToolTip? _toolTip;
+    private TrayController? _trayController;
 
     private readonly List<DocumentSession> _sessions = new();
     private int _activeSessionIndex = -1;
@@ -2692,6 +2693,7 @@ public sealed class MainWindow : Form
         }
         _searchButton.IsActive = hasDocument && _searchBar.Visible;
         UpdateZoomIndicators();
+        UpdateTrayTooltip();
     }
 
     // --- Persistence --------------------------------------------------------
@@ -3035,6 +3037,11 @@ public sealed class MainWindow : Form
 
         RescaleChrome();
 
+        if (!_suppressPersistenceOnClose && _trayController is null)
+        {
+            InitializeTrayController();
+        }
+
         if (_resizeFilter is null)
         {
             _resizeFilter = new ResizeBorderFilter(this);
@@ -3241,6 +3248,67 @@ public sealed class MainWindow : Form
 
     internal void SuppressPersistenceOnClose() => _suppressPersistenceOnClose = true;
 
+    private void InitializeTrayController()
+    {
+        _trayController = new TrayController(
+            Handle,
+            Icon,
+            () => Visible && WindowState != FormWindowState.Minimized,
+            () => _settings.RecentFiles,
+            ToggleTrayWindowVisibility,
+            () =>
+            {
+                ShowFromTray();
+                OpenFile();
+            },
+            path =>
+            {
+                ShowFromTray();
+                OpenDocument(path);
+            },
+            () =>
+            {
+                ShowFromTray();
+                ShowSettingsDialog();
+            },
+            autoCheckUpdates => ShowAboutDialog(autoCheckUpdates),
+            Close);
+        UpdateTrayTooltip();
+    }
+
+    private void ToggleTrayWindowVisibility()
+    {
+        if (Visible && WindowState != FormWindowState.Minimized)
+        {
+            Hide();
+        }
+        else
+        {
+            ShowFromTray();
+        }
+    }
+
+    private void ShowFromTray()
+    {
+        if (!Visible)
+        {
+            Show();
+        }
+        if (WindowState == FormWindowState.Minimized)
+        {
+            WindowState = FormWindowState.Normal;
+        }
+        Activate();
+    }
+
+    private void UpdateTrayTooltip()
+    {
+        var segment = _showingStartTab || _documentPath is null
+            ? null
+            : Path.GetFileName(_documentPath);
+        _trayController?.UpdateTooltip(segment);
+    }
+
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
         if (!_suppressPersistenceOnClose)
@@ -3255,6 +3323,8 @@ public sealed class MainWindow : Form
         _sessions.Clear();
         _document = null;
         _toolTip?.Dispose();
+        _trayController?.Dispose();
+        _trayController = null;
         if (_resizeFilter is not null)
         {
             Application.RemoveMessageFilter(_resizeFilter);

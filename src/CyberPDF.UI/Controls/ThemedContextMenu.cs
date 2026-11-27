@@ -6,13 +6,20 @@ namespace CyberPDF.UI.Controls;
 /// <summary>One row in a themed context menu.</summary>
 public sealed class ContextMenuItem
 {
-    public ContextMenuItem(string text, Action? action, IconKind icon = IconKind.None, bool enabled = true, Color? swatchColor = null)
+    public ContextMenuItem(
+        string text,
+        Action? action,
+        IconKind icon = IconKind.None,
+        bool enabled = true,
+        Color? swatchColor = null,
+        IReadOnlyList<ContextMenuItem>? children = null)
     {
         Text = text;
         Action = action;
         Icon = icon;
         Enabled = enabled;
         SwatchColor = swatchColor;
+        Children = children;
     }
 
     public string Text { get; }
@@ -24,6 +31,8 @@ public sealed class ContextMenuItem
     public bool Enabled { get; }
 
     public Color? SwatchColor { get; }
+
+    public IReadOnlyList<ContextMenuItem>? Children { get; }
 
     /// <summary>A separator row.</summary>
     public static ContextMenuItem Separator() => new(string.Empty, null);
@@ -56,11 +65,21 @@ public sealed class ThemedContextMenu : ContextMenuStrip
     public static ThemedContextMenu Create(params ContextMenuItem[] items)
     {
         var menu = new ThemedContextMenu();
+        PopulateItems(menu.Items, items, (ThemedRenderer)menu.Renderer, menu.Font);
+        return menu;
+    }
+
+    private static void PopulateItems(
+        ToolStripItemCollection target,
+        IEnumerable<ContextMenuItem> items,
+        ThemedRenderer renderer,
+        Font font)
+    {
         foreach (var item in items)
         {
-            if (item.Action is null && string.IsNullOrEmpty(item.Text))
+            if (item.Action is null && item.Children is null && string.IsNullOrEmpty(item.Text))
             {
-                menu.Items.Add(new ToolStripSeparator());
+                target.Add(new ToolStripSeparator());
                 continue;
             }
 
@@ -74,9 +93,23 @@ public sealed class ThemedContextMenu : ContextMenuStrip
             {
                 entry.Click += (_, _) => action();
             }
-            menu.Items.Add(entry);
+            if (item.Children is { Count: > 0 } children)
+            {
+                if (entry.DropDown is ToolStripDropDownMenu subMenu)
+                {
+                    subMenu.Renderer = renderer;
+                    subMenu.BackColor = Theme.Surface;
+                    subMenu.ForeColor = Theme.Text;
+                    subMenu.Font = font;
+                    subMenu.ShowImageMargin = true;
+                    subMenu.ShowCheckMargin = false;
+                    subMenu.Padding = new Padding(4);
+                    subMenu.DropShadowEnabled = true;
+                }
+                PopulateItems(entry.DropDownItems, children, renderer, font);
+            }
+            target.Add(entry);
         }
-        return menu;
     }
 
     private sealed record MenuItemVisual(IconKind Icon, Color? SwatchColor);
