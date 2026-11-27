@@ -228,15 +228,13 @@ public sealed class ThemedToolTip : IDisposable
             BackColor = Theme.Bg;
             Bounds = new Rectangle(x, y, width, height);
 
-            if (!Visible)
+            if (!IsHandleCreated)
             {
-                Show();
+                CreateHandle();
             }
-            else
-            {
-                // Repositioning a visible tooltip must not reactivate the window.
-                SetWindowPos(Handle, HwndTopmost, x, y, width, height, SwpNoActivate);
-            }
+            // Show/move strictly with SWP_NOACTIVATE so hovering toolbar or
+            // search buttons never steals focus or triggers placeholder flicker.
+            SetWindowPos(Handle, HwndTopmost, x, y, width, height, SwpNoActivate | SwpShowWindow);
             Invalidate();
         }
 
@@ -304,6 +302,7 @@ public sealed class ThemedToolTip : IDisposable
         }
 
         private const uint SwpNoActivate = 0x0010;
+        private const uint SwpShowWindow = 0x0040;
         private static readonly IntPtr HwndTopmost = new(-1);
 
         [System.Runtime.InteropServices.DllImport("user32.dll")]

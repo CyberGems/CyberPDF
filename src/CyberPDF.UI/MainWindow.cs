@@ -31,6 +31,7 @@ public sealed class MainWindow : Form
     private readonly TabStrip _tabStrip = new();
     private readonly Panel _toolbar = new();
     private readonly Panel _statusBar = new();
+    private readonly Panel _contentHost = new();
     private readonly PageViewer _viewer;
     private readonly ThinScrollBar _scrollBar = new();
     private readonly ThinScrollBar _hScrollBar = new() { Orientation = ScrollBarOrientation.Horizontal };
@@ -76,6 +77,7 @@ public sealed class MainWindow : Form
 
     private readonly List<DocumentSession> _sessions = new();
     private int _activeSessionIndex = -1;
+    private bool _showingStartTab;
     private PdfDocument? _document;
     private bool _diagRequested;
     private bool _stressRequested;
@@ -303,19 +305,24 @@ public sealed class MainWindow : Form
 
     private void BuildSearchBar()
     {
-        _searchBar.Dock = DockStyle.Top;
-        _searchBar.Height = 42;
+        _searchBar.Dock = DockStyle.None;
+        _searchBar.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+        _searchBar.Size = new Size(444, 42);
         _searchBar.BackColor = Theme.Surface;
         _searchBar.Visible = false;
+        _searchBar.SizeChanged += (_, _) => UpdateSearchPillRegion();
         _searchBar.Paint += (_, e) =>
         {
-            using var pen = new Pen(Theme.Border);
-            e.Graphics.DrawLine(pen, 0, _searchBar.Height - 1, _searchBar.Width, _searchBar.Height - 1);
+            var g = e.Graphics;
+            ThemePainter.PrepareHighQuality(g);
+            var rect = new Rectangle(0, 0, _searchBar.Width - 1, _searchBar.Height - 1);
+            ThemePainter.FillRounded(g, rect, 8, Theme.Surface);
+            ThemePainter.DrawRounded(g, rect, 8, Theme.BorderStrong);
         };
 
         // Rounded themed container around a borderless UndoableTextBox so the
         // search box matches the palette and inherits Undo/Redo + right-click menu.
-        _searchBoxHost.Size = new Size(256, 30);
+        _searchBoxHost.Size = new Size(188, 28);
         _searchBoxHost.BackColor = Theme.Surface;
         _searchBoxHost.Margin = new Padding(0, 1, 4, 1);
         _searchBoxHost.Paint += (_, e) =>
@@ -331,12 +338,12 @@ public sealed class MainWindow : Form
         _searchField.BackColor = Theme.Canvas;
         _searchField.ForeColor = Theme.Text;
         _searchField.Dock = DockStyle.Fill;
-        _searchField.PlaceholderText = Strings.Get("SearchPlaceholder");
+        _searchField.CueText = Strings.Get("SearchPlaceholder");
         _searchField.TextChanged += (_, _) => RunSearch();
         _searchField.KeyDown += OnSearchFieldKeyDown;
         _searchField.GotFocus += (_, _) => _searchBoxHost.Invalidate();
         _searchField.LostFocus += (_, _) => _searchBoxHost.Invalidate();
-        _searchBoxHost.Padding = new Padding(9, 6, 9, 5);
+        _searchBoxHost.Padding = new Padding(8, 5, 8, 4);
         _searchBoxHost.Controls.Add(_searchField);
 
         ConfigureButton(_matchCaseButton, IconKind.None, "Aa", () =>
@@ -354,9 +361,9 @@ public sealed class MainWindow : Form
         _wholeWordButton.AccessibleName = Strings.Get("WholeWord");
 
         _searchResults.AutoSize = false;
-        _searchResults.Width = 104;
-        _searchResults.Height = 30;
-        _searchResults.TextAlign = ContentAlignment.MiddleLeft;
+        _searchResults.Width = 72;
+        _searchResults.Height = 28;
+        _searchResults.TextAlign = ContentAlignment.MiddleCenter;
         _searchResults.ForeColor = Theme.TextMuted;
         _searchResults.BackColor = Color.Transparent;
 
@@ -370,7 +377,7 @@ public sealed class MainWindow : Form
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false,
-            Padding = new Padding(10, 5, 10, 5),
+            Padding = new Padding(8, 6, 8, 6),
             BackColor = Color.Transparent,
         };
         layout.Controls.Add(_searchBoxHost);
@@ -894,12 +901,9 @@ public sealed class MainWindow : Form
 
     private void BuildLayout()
     {
-        var host = new Panel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Theme.Canvas,
-            Padding = new Padding(0),
-        };
+        _contentHost.Dock = DockStyle.Fill;
+        _contentHost.BackColor = Theme.Canvas;
+        _contentHost.Padding = new Padding(0);
 
         _scrollBar.Dock = DockStyle.Right;
         _scrollBar.Width = 12;
@@ -911,6 +915,8 @@ public sealed class MainWindow : Form
 
         _viewer.Dock = DockStyle.Fill;
         _viewer.Visible = false;
+        _viewer.Resize += (_, _) => PositionSearchPill();
+        _viewer.Controls.Add(_searchBar);
         _welcomeView.Dock = DockStyle.Fill;
         _welcomeView.Visible = true;
 
@@ -920,18 +926,17 @@ public sealed class MainWindow : Form
         _sidePanel.Width = 190;
         _sidePanel.Visible = false;
 
-        host.Controls.Add(_viewer);
-        host.Controls.Add(_welcomeView);
-        host.Controls.Add(_hScrollBar);
-        host.Controls.Add(_scrollBar);
-        host.Controls.Add(_sidePanel);
+        _contentHost.Controls.Add(_viewer);
+        _contentHost.Controls.Add(_welcomeView);
+        _contentHost.Controls.Add(_hScrollBar);
+        _contentHost.Controls.Add(_scrollBar);
+        _contentHost.Controls.Add(_sidePanel);
 
         _tabStrip.Dock = DockStyle.Top;
         _tabStrip.Height = 32;
 
-        Controls.Add(host);
+        Controls.Add(_contentHost);
         Controls.Add(_statusBar);
-        Controls.Add(_searchBar);
         Controls.Add(_toolbar);
         Controls.Add(_tabStrip);
         Controls.Add(_titleBar);
@@ -1004,9 +1009,24 @@ public sealed class MainWindow : Form
         };
         _viewer.LinkPageRequested += (_, _) => SaveViewState();
 
-        _tabStrip.TabSelected += (_, index) => ActivateSession(index);
-        _tabStrip.TabCloseRequested += (_, index) => CloseTab(index);
-        _tabStrip.NewTabRequested += (_, _) => OpenFile();
+        _tabStrip.TabSelected += (_, index) =>
+        {
+            if (_showingStartTab && index == _sessions.Count)
+            {
+                return;
+            }
+            ActivateSession(index);
+        };
+        _tabStrip.TabCloseRequested += (_, index) =>
+        {
+            if (_showingStartTab && index == _sessions.Count)
+            {
+                CloseStartTab();
+                return;
+            }
+            CloseTab(index);
+        };
+        _tabStrip.NewTabRequested += (_, _) => OpenStartTab();
 
         _welcomeView.OpenRequested += (_, _) => OpenFile();
         _welcomeView.FileRequested += (_, path) => OpenDocument(path);
@@ -1074,12 +1094,13 @@ public sealed class MainWindow : Form
         _updatingScrollBar = true;
         try
         {
-            _scrollBar.Visible = _document is not null;
+            var showViewerBars = _document is not null && !_showingStartTab;
+            _scrollBar.Visible = showViewerBars;
             _scrollBar.Maximum = Math.Max(0, _viewer.ContentHeight);
             _scrollBar.LargeChange = Math.Max(1, _viewer.ViewportHeight);
             _scrollBar.Value = _viewer.ScrollY;
 
-            var needHorizontal = _document is not null && _viewer.ContentWidth > _viewer.ClientSize.Width;
+            var needHorizontal = showViewerBars && _viewer.ContentWidth > _viewer.ClientSize.Width;
             _hScrollBar.Visible = needHorizontal;
             _hScrollBar.Maximum = Math.Max(0, _viewer.ContentWidth);
             _hScrollBar.LargeChange = Math.Max(1, _viewer.ClientSize.Width);
@@ -1088,6 +1109,10 @@ public sealed class MainWindow : Form
         finally
         {
             _updatingScrollBar = false;
+        }
+        if (_searchBar.Visible)
+        {
+            PositionSearchPill();
         }
     }
 
@@ -1188,6 +1213,7 @@ public sealed class MainWindow : Form
         _document = result.Document;
         _documentPath = path;
         _linkHoverPreview = null;
+        _showingStartTab = false;
 
         _viewer.SetDocument(_document, dropCache: false);
         _welcomeView.Visible = false;
@@ -1255,14 +1281,18 @@ public sealed class MainWindow : Form
 
     private void ActivateSession(int index)
     {
-        if (index < 0 || index >= _sessions.Count || index == _activeSessionIndex)
+        if (index < 0 || index >= _sessions.Count || (index == _activeSessionIndex && !_showingStartTab))
         {
             return;
         }
 
-        SaveCurrentSessionToMemory();
-        SaveViewState();
+        if (!_showingStartTab)
+        {
+            SaveCurrentSessionToMemory();
+            SaveViewState();
+        }
 
+        _showingStartTab = false;
         _activeSessionIndex = index;
         var target = _sessions[index];
         _document = target.Document;
@@ -1303,6 +1333,56 @@ public sealed class MainWindow : Form
         _viewer.Focus();
     }
 
+    private void OpenStartTab()
+    {
+        if (_showingStartTab)
+        {
+            return;
+        }
+        if (_document is not null)
+        {
+            SaveCurrentSessionToMemory();
+            SaveViewState();
+        }
+        _showingStartTab = true;
+        _linkHoverPreview = null;
+        if (_searchBar.Visible)
+        {
+            CloseSearch();
+        }
+        _viewer.Visible = false;
+        _sidePanel.Visible = false;
+        _scrollBar.Visible = false;
+        _hScrollBar.Visible = false;
+        _welcomeView.SetRecentFiles(_settings.RecentFiles);
+        _welcomeView.Visible = true;
+        Text = $"{Strings.Get("NewTabTitle")} — {Strings.Get("AppTitle")}";
+        SyncTabStrip();
+        UpdateCommandStates();
+        UpdateStatus();
+    }
+
+    private void CloseStartTab()
+    {
+        if (!_showingStartTab)
+        {
+            return;
+        }
+        _showingStartTab = false;
+        if (_sessions.Count > 0)
+        {
+            var target = Math.Clamp(_activeSessionIndex, 0, _sessions.Count - 1);
+            _activeSessionIndex = -1;
+            ActivateSession(target);
+        }
+        else
+        {
+            SyncTabStrip();
+            UpdateCommandStates();
+            UpdateStatus();
+        }
+    }
+
     private void CloseTab(int index)
     {
         if (index < 0 || index >= _sessions.Count)
@@ -1310,7 +1390,7 @@ public sealed class MainWindow : Form
             return;
         }
 
-        if (index == _activeSessionIndex)
+        if (index == _activeSessionIndex && !_showingStartTab)
         {
             SaveCurrentSessionToMemory();
             SaveViewState();
@@ -1323,6 +1403,7 @@ public sealed class MainWindow : Form
         if (_sessions.Count == 0)
         {
             _activeSessionIndex = -1;
+            _showingStartTab = false;
             _document = null;
             _documentPath = null;
             _linkHoverPreview = null;
@@ -1339,6 +1420,16 @@ public sealed class MainWindow : Form
             return;
         }
 
+        if (_showingStartTab)
+        {
+            if (_activeSessionIndex >= _sessions.Count)
+            {
+                _activeSessionIndex = _sessions.Count - 1;
+            }
+            SyncTabStrip();
+            return;
+        }
+
         var nextIndex = Math.Clamp(index, 0, _sessions.Count - 1);
         _activeSessionIndex = -1;
         ActivateSession(nextIndex);
@@ -1349,7 +1440,13 @@ public sealed class MainWindow : Form
         var items = _sessions
             .Select(s => new DocumentTabItem(s.FilePath, Path.GetFileName(s.FilePath), s.FilePath))
             .ToList();
-        _tabStrip.SetTabs(items, _activeSessionIndex);
+        var activeIdx = _activeSessionIndex;
+        if (_showingStartTab)
+        {
+            items.Add(new DocumentTabItem("__start", Strings.Get("NewTabTitle"), Strings.Get("NewTabTitle")));
+            activeIdx = items.Count - 1;
+        }
+        _tabStrip.SetTabs(items, activeIdx);
     }
 
     /// <summary>Fits the page width on the first view, clamped to a 100% maximum.</summary>
@@ -1491,19 +1588,46 @@ public sealed class MainWindow : Form
         UpdateStatus();
     }
 
-    /// <summary>Shows the search bar and focuses the field.</summary>
+    /// <summary>Shows the floating search pill and focuses the field.</summary>
     private void OpenSearch()
     {
-        if (_document is null)
+        if (_document is null || _showingStartTab)
         {
             return;
         }
 
+        PositionSearchPill();
         _searchBar.Visible = true;
+        _searchBar.BringToFront();
         _searchButton.IsActive = true;
         _searchField.Focus();
         _searchField.SelectAll();
-        RescaleChrome();
+    }
+
+    private void PositionSearchPill()
+    {
+        if (_viewer.ClientSize.Width <= 0)
+        {
+            return;
+        }
+        var scale = DeviceDpi / 96f;
+        var margin = (int)Math.Round(12 * scale);
+        var left = Math.Max(margin, _viewer.ClientSize.Width - _searchBar.Width - margin);
+        _searchBar.Location = new Point(left, margin);
+        _searchBar.BringToFront();
+    }
+
+    private void UpdateSearchPillRegion()
+    {
+        if (_searchBar.Width <= 2 || _searchBar.Height <= 2)
+        {
+            return;
+        }
+        var radius = (int)Math.Round(8 * (DeviceDpi / 96f));
+        using var path = ThemePainter.RoundedRect(new Rectangle(0, 0, _searchBar.Width, _searchBar.Height), Math.Max(4, radius));
+        var old = _searchBar.Region;
+        _searchBar.Region = new Region(path);
+        old?.Dispose();
     }
 
     /// <summary>Shows or hides the thumbnails and bookmarks panel.</summary>
@@ -1610,7 +1734,6 @@ public sealed class MainWindow : Form
         _viewer.ClearSearch();
         _searchResults.Text = string.Empty;
         _viewer.Focus();
-        RescaleChrome();
     }
 
     /// <summary>
@@ -2099,7 +2222,7 @@ public sealed class MainWindow : Form
     {
         _openButton.Text = Strings.Get("Open");
         _copyButton.Text = Strings.Get("Copy");
-        _searchField.PlaceholderText = Strings.Get("SearchPlaceholder");
+        _searchField.CueText = Strings.Get("SearchPlaceholder");
         _themeButton.AccessibleName = Strings.Get("ChangeTheme");
         _minimizeButton.AccessibleName = Strings.Get("Minimize");
         _maximizeButton.AccessibleName = WindowState == FormWindowState.Maximized
@@ -2145,6 +2268,7 @@ public sealed class MainWindow : Form
         _titleBar.BackColor = Theme.Bg;
         _toolbar.BackColor = Theme.Surface;
         _statusBar.BackColor = Theme.Surface;
+        _contentHost.BackColor = Theme.Canvas;
         _pageLabel.ForeColor = Theme.TextMuted;
         _zoomLabel.ForeColor = Theme.TextMuted;
         _titleLabel.ForeColor = Theme.Text;
@@ -2218,9 +2342,9 @@ public sealed class MainWindow : Form
             return;
         }
 
-        if (_document is null)
+        if (_document is null || _showingStartTab)
         {
-            _pageLabel.Text = Strings.Get("NoDocument");
+            _pageLabel.Text = _showingStartTab ? Strings.Get("NewTabTitle") : Strings.Get("NoDocument");
             _pageLabel.Cursor = Cursors.Default;
             _zoomLabel.Text = string.Empty;
             _zoomLabel.Cursor = Cursors.Default;
@@ -2243,7 +2367,7 @@ public sealed class MainWindow : Form
 
     private void UpdateCommandStates()
     {
-        var hasDocument = _document is not null;
+        var hasDocument = _document is not null && !_showingStartTab;
         _zoomInButton.Enabled = hasDocument;
         _zoomOutButton.Enabled = hasDocument;
         _fitWidthButton.Enabled = hasDocument;
@@ -2387,6 +2511,11 @@ public sealed class MainWindow : Form
     private void InvalidateTitleBar()
     {
         var appName = Strings.Get("AppTitle");
+        if (_showingStartTab)
+        {
+            _titleLabel.Text = $"{Strings.Get("NewTabTitle")} · {appName}";
+            return;
+        }
         if (_documentPath is null)
         {
             _titleLabel.Text = $"{appName} · {Strings.Get("AppSubtitle")}";
@@ -2521,8 +2650,16 @@ public sealed class MainWindow : Form
                 _viewer.GoToNextMatch();
                 e.Handled = true;
                 break;
+            case Keys.T when e.Control:
+                OpenStartTab();
+                e.Handled = true;
+                break;
             case Keys.W when e.Control:
-                if (_sessions.Count > 0)
+                if (_showingStartTab)
+                {
+                    CloseStartTab();
+                }
+                else if (_sessions.Count > 0)
                 {
                     CloseTab(_activeSessionIndex);
                 }
@@ -2545,10 +2682,23 @@ public sealed class MainWindow : Form
 
     protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
     {
-        if (keyData == (Keys.Control | Keys.Tab) && _sessions.Count > 1)
+        if (keyData == (Keys.Control | Keys.Tab))
         {
-            ActivateSession((_activeSessionIndex + 1) % _sessions.Count);
-            return true;
+            var total = _sessions.Count + (_showingStartTab ? 1 : 0);
+            if (total > 1)
+            {
+                var current = _showingStartTab ? _sessions.Count : _activeSessionIndex;
+                var next = (current + 1) % total;
+                if (next < _sessions.Count)
+                {
+                    ActivateSession(next);
+                }
+                else
+                {
+                    OpenStartTab();
+                }
+                return true;
+            }
         }
         return base.ProcessCmdKey(ref msg, keyData);
     }
@@ -2674,21 +2824,30 @@ public sealed class MainWindow : Form
         _statusBar.Height = (int)Math.Round(StatusBarHeight * scale);
         _prevPageButton.Width = (int)Math.Round(28 * scale);
         _nextPageButton.Width = (int)Math.Round(28 * scale);
-        _searchBar.Height = (int)Math.Round(42 * scale);
-        _searchBoxHost.Size = new Size((int)Math.Round(256 * scale), (int)Math.Round(30 * scale));
+        _searchBar.Size = new Size((int)Math.Round(444 * scale), (int)Math.Round(42 * scale));
+        _searchBoxHost.Size = new Size((int)Math.Round(188 * scale), (int)Math.Round(28 * scale));
         _searchBoxHost.Padding = new Padding(
-            (int)Math.Round(9 * scale),
-            (int)Math.Round(6 * scale),
-            (int)Math.Round(9 * scale),
-            (int)Math.Round(5 * scale));
-        _searchResults.Width = (int)Math.Round(104 * scale);
-        _searchResults.Height = (int)Math.Round(30 * scale);
+            (int)Math.Round(8 * scale),
+            (int)Math.Round(5 * scale),
+            (int)Math.Round(8 * scale),
+            (int)Math.Round(4 * scale));
+        _searchResults.Width = (int)Math.Round(72 * scale);
+        _searchResults.Height = (int)Math.Round(28 * scale);
         _matchCaseButton.Size = _matchCaseButton.MeasurePreferredSize(scale);
         _wholeWordButton.Size = _wholeWordButton.MeasurePreferredSize(scale);
-        _searchPreviousButton.Size = new Size((int)Math.Round(30 * scale), (int)Math.Round(30 * scale));
-        _searchNextButton.Size = new Size((int)Math.Round(30 * scale), (int)Math.Round(30 * scale));
-        _searchCloseButton.Size = new Size((int)Math.Round(30 * scale), (int)Math.Round(30 * scale));
-        _pageLabel.Width = (int)Math.Round((_document is null ? 210 : 135) * scale);
+        _searchPreviousButton.Size = new Size((int)Math.Round(28 * scale), (int)Math.Round(28 * scale));
+        _searchNextButton.Size = new Size((int)Math.Round(28 * scale), (int)Math.Round(28 * scale));
+        _searchCloseButton.Size = new Size((int)Math.Round(28 * scale), (int)Math.Round(28 * scale));
+        if (_searchBar.Controls.Count > 0 && _searchBar.Controls[0] is FlowLayoutPanel searchFlow)
+        {
+            searchFlow.Padding = new Padding(
+                (int)Math.Round(8 * scale),
+                (int)Math.Round(6 * scale),
+                (int)Math.Round(8 * scale),
+                (int)Math.Round(6 * scale));
+        }
+        PositionSearchPill();
+        _pageLabel.Width = (int)Math.Round((_document is null || _showingStartTab ? 210 : 135) * scale);
 
         var titleHeight = (int)Math.Round(TitleBarHeight * scale);
         foreach (var windowButton in new[] { _themeButton, _minimizeButton, _maximizeButton, _closeButton })

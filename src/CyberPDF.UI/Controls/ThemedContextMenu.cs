@@ -238,6 +238,17 @@ public sealed class UndoableTextBox : TextBox, IUndoRedoField
     private string _lastText = string.Empty;
     private int _lastCaret;
     private bool _applyingHistory;
+    private string _cueText = string.Empty;
+
+    public string CueText
+    {
+        get => _cueText;
+        set
+        {
+            _cueText = value ?? string.Empty;
+            Invalidate();
+        }
+    }
 
     public UndoableTextBox()
     {
@@ -331,6 +342,28 @@ public sealed class UndoableTextBox : TextBox, IUndoRedoField
             _lastCaret = SelectionStart;
         }
         base.OnTextChanged(e);
+        if (TextLength == 0 && !string.IsNullOrEmpty(_cueText))
+        {
+            Invalidate();
+        }
+    }
+
+    protected override void WndProc(ref Message m)
+    {
+        base.WndProc(ref m);
+        // Paint custom cue text cleanly on WM_PAINT without Windows native
+        // EM_SETCUEBANNER flicker when tooltips or child buttons hover.
+        if (m.Msg == 0x000F && TextLength == 0 && !string.IsNullOrEmpty(_cueText) && IsHandleCreated)
+        {
+            using var g = Graphics.FromHwnd(Handle);
+            TextRenderer.DrawText(
+                g,
+                _cueText,
+                Font,
+                ClientRectangle,
+                Theme.TextMuted,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+        }
     }
 
     protected override bool ProcessCmdKey(ref Message m, Keys keyData)

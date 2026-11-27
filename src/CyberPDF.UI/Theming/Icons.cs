@@ -92,10 +92,10 @@ public static class Icons
 
             case IconKind.ThemeDefault:
             {
-                // Crisp crescent moon for the dark default theme.
+                // Crisp crescent moon with no crossing strokes.
                 using var moon = new GraphicsPath();
-                moon.AddArc(2.5f, 2.5f, 11f, 11f, -55, 250);
-                moon.AddArc(6f, 2f, 8.5f, 8.5f, 115, -195);
+                moon.AddArc(2.8f, 2.8f, 10.4f, 10.4f, 35f, 260f);
+                moon.AddBezier(10.20f, 3.29f, 6.8f, 5.2f, 7.6f, 9.8f, 12.26f, 10.98f);
                 moon.CloseFigure();
                 g.DrawPath(pen, moon);
                 break;
@@ -351,6 +351,41 @@ public static class Icons
             case IconKind.Check:
                 g.DrawLines(pen, new[] { new PointF(3f, 8.4f), new PointF(6.5f, 11.8f), new PointF(13f, 4.5f) });
                 break;
+
+            case IconKind.Highlight:
+                g.DrawLines(pen, new[]
+                {
+                    new PointF(9.8f, 2.4f),
+                    new PointF(13.6f, 6.2f),
+                    new PointF(7.2f, 12.6f),
+                    new PointF(3.4f, 8.8f),
+                    new PointF(9.8f, 2.4f),
+                });
+                g.DrawLines(pen, new[] { new PointF(3.4f, 8.8f), new PointF(2.2f, 13.6f), new PointF(7.2f, 12.6f) });
+                g.DrawLine(pen, 8.5f, 13.8f, 14f, 13.8f);
+                break;
+
+            case IconKind.Bookmark:
+                g.DrawPolygon(pen, new[]
+                {
+                    new PointF(4f, 2.2f),
+                    new PointF(12f, 2.2f),
+                    new PointF(12f, 13.8f),
+                    new PointF(8f, 10.5f),
+                    new PointF(4f, 13.8f),
+                });
+                break;
+
+            case IconKind.BookmarkFilled:
+                g.FillPolygon(brush, new[]
+                {
+                    new PointF(4f, 2.2f),
+                    new PointF(12f, 2.2f),
+                    new PointF(12f, 13.8f),
+                    new PointF(8f, 10.5f),
+                    new PointF(4f, 13.8f),
+                });
+                break;
         }
 
         g.Restore(state);
@@ -402,4 +437,7 @@ public enum IconKind
     Plus,
     Document,
     Check,
+    Highlight,
+    Bookmark,
+    BookmarkFilled,
 }

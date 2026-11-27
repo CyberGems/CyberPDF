@@ -108,6 +108,7 @@ public static class Strings
         ["ViewTwoPages"] = ("Two pages", "Dos páginas"),
         ["DarkPageMode"] = ("Dark page mode", "Modo nocturno de página"),
         ["NewTab"] = ("Open another PDF", "Abrir otro PDF"),
+        ["NewTabTitle"] = ("New tab", "Nueva pestaña"),
         ["CloseTab"] = ("Close tab", "Cerrar pestaña"),
 
         // Search
