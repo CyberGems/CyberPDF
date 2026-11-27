@@ -69,6 +69,8 @@ public sealed class ToolButton : Control
 
     public bool IsWindowChrome { get; set; }
 
+    public Color? IconColorOverride { get; set; }
+
     public int CornerRadius { get; set; } = 6;
 
     /// <summary>Optional color bar painted near the bottom edge (e.g. active highlight color).</summary>
@@ -186,7 +188,7 @@ public sealed class ToolButton : Control
             ? Theme.TextMuted
             : IsDanger && (_hovered || _pressed)
                 ? Theme.DangerText
-                : Theme.Text;
+                : IconColorOverride ?? Theme.Text;
 
         var hasText = !string.IsNullOrEmpty(Text);
         var scale = DeviceDpi / 96f;
@@ -239,6 +241,8 @@ public sealed class ToolButton : Control
                 ink,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
         }
+
+        base.OnPaint(e);
     }
 
     protected override void OnKeyDown(KeyEventArgs e)

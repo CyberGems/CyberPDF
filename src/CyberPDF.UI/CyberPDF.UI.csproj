@@ -24,6 +24,7 @@
   <ItemGroup>
     <EmbeddedResource Include="Assets\CyberPDF.ico" />
     <EmbeddedResource Include="Assets\CyberPDF.png" />
+    <EmbeddedResource Include="Assets\Suite\*.png" />
   </ItemGroup>
 
   <!-- The native engine is copied beside the executable for development runs so

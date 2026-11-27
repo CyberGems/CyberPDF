@@ -106,6 +106,7 @@ internal static class Program
         if (shotPath is not null)
         {
             var withSelection = args.Any(a => a.Equals("--select", StringComparison.OrdinalIgnoreCase));
+            var aboutDialog = args.Any(a => a.Equals("--about", StringComparison.OrdinalIgnoreCase));
             var searchArg = args.FirstOrDefault(a => a.StartsWith("--search=", StringComparison.OrdinalIgnoreCase));
             var searchTerm = searchArg?.Substring("--search=".Length);
             var panelArg = args.FirstOrDefault(a => a.StartsWith("--panel=", StringComparison.OrdinalIgnoreCase));
@@ -127,7 +128,7 @@ internal static class Program
                 {
                     await Task.Delay(300);
                 }
-                await ScreenshotProbe.CaptureAsync(window, shotPath, withSelection, searchTerm, panelTab);
+                await ScreenshotProbe.CaptureAsync(window, shotPath, withSelection, searchTerm, panelTab, aboutDialog);
                 window.Close();
             };
         }

@@ -47,9 +47,32 @@ internal static class ScreenshotProbe
         string path,
         bool selectText = false,
         string? searchTerm = null,
-        int? panelTab = null)
+        int? panelTab = null,
+        bool aboutDialog = false)
     {
         Theme.Apply(Theme.CurrentTheme);
+
+        if (aboutDialog)
+        {
+            using var about = new Controls.AboutDialog(autoCheckUpdates: false);
+            about.StartPosition = FormStartPosition.Manual;
+            about.Location = window.Location;
+            about.Show(window);
+            await Task.Delay(150);
+            Application.DoEvents();
+
+            var aboutSize = about.ClientSize;
+            using var aboutBitmap = new Bitmap(Math.Max(1, aboutSize.Width), Math.Max(1, aboutSize.Height), System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            about.DrawToBitmap(aboutBitmap, new Rectangle(0, 0, aboutBitmap.Width, aboutBitmap.Height));
+            var outDir = Path.GetDirectoryName(Path.GetFullPath(path));
+            if (!string.IsNullOrEmpty(outDir))
+            {
+                Directory.CreateDirectory(outDir);
+            }
+            aboutBitmap.Save(path, ImageFormat.Png);
+            about.Close();
+            return;
+        }
 
         if (panelTab is int tab)
         {

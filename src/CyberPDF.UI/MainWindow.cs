@@ -2448,7 +2448,23 @@ public sealed class MainWindow : Form
                 _store.Save(_settings);
             },
             lang => ApplyLanguage(lang),
-            () => _store.Save(_settings));
+            () => _store.Save(_settings),
+            () => ShowAboutDialog());
+        dialog.ShowDialog(this);
+    }
+
+    private void ShowAboutDialog(bool autoCheckUpdates = false)
+    {
+        if (WindowState == FormWindowState.Minimized)
+        {
+            WindowState = FormWindowState.Normal;
+        }
+        if (!Visible)
+        {
+            Show();
+        }
+        Activate();
+        using var dialog = new AboutDialog(autoCheckUpdates);
         dialog.ShowDialog(this);
     }
 
@@ -2464,7 +2480,8 @@ public sealed class MainWindow : Form
             new ContextMenuItem(Strings.Get("LanguageEn"), () => ApplyLanguage(Lang.En), Strings.Current == Lang.En ? IconKind.Check : IconKind.None),
             new ContextMenuItem(Strings.Get("LanguageEs"), () => ApplyLanguage(Lang.Es), Strings.Current == Lang.Es ? IconKind.Check : IconKind.None),
             ContextMenuItem.Separator(),
-            new ContextMenuItem(Strings.Get("Settings"), ShowSettingsDialog, IconKind.Settings));
+            new ContextMenuItem(Strings.Get("Settings"), ShowSettingsDialog, IconKind.Settings),
+            new ContextMenuItem(Strings.Get("AboutMenu"), () => ShowAboutDialog(), IconKind.Gem));
 
         var anchor = _settingsButton.PointToScreen(new Point(_settingsButton.Width - menu.PreferredSize.Width, _settingsButton.Height));
         menu.Show(anchor);

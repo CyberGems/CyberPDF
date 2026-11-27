@@ -386,6 +386,107 @@ public static class Icons
                     new PointF(4f, 13.8f),
                 });
                 break;
+
+            case IconKind.Gem:
+                g.DrawPolygon(pen, new[]
+                {
+                    new PointF(4.4f, 2.6f),
+                    new PointF(11.6f, 2.6f),
+                    new PointF(14f, 6.2f),
+                    new PointF(8f, 13.6f),
+                    new PointF(2f, 6.2f),
+                });
+                g.DrawLine(pen, 2f, 6.2f, 14f, 6.2f);
+                g.DrawLine(pen, 5.8f, 2.6f, 8f, 13.6f);
+                g.DrawLine(pen, 10.2f, 2.6f, 8f, 13.6f);
+                break;
+
+            case IconKind.BookOpen:
+                g.DrawLines(pen, new[] { new PointF(8f, 4f), new PointF(2.4f, 3f), new PointF(2.4f, 12.2f), new PointF(8f, 13.2f) });
+                g.DrawLines(pen, new[] { new PointF(8f, 4f), new PointF(13.6f, 3f), new PointF(13.6f, 12.2f), new PointF(8f, 13.2f) });
+                g.DrawLine(pen, 8f, 4f, 8f, 13.2f);
+                break;
+
+            case IconKind.GitHub:
+                g.DrawArc(pen, 2.4f, 2.4f, 11.2f, 11.2f, 122, 296);
+                g.DrawLines(pen, new[]
+                {
+                    new PointF(6f, 13.2f),
+                    new PointF(6f, 10.8f),
+                    new PointF(4.8f, 9.6f),
+                    new PointF(5.2f, 6.2f),
+                    new PointF(6.8f, 7.2f),
+                    new PointF(9.2f, 7.2f),
+                    new PointF(10.8f, 6.2f),
+                    new PointF(11.2f, 9.6f),
+                    new PointF(10f, 10.8f),
+                    new PointF(10f, 13.2f),
+                });
+                break;
+
+            case IconKind.Bug:
+                g.DrawEllipse(pen, 4.6f, 5.2f, 6.8f, 8.2f);
+                g.DrawArc(pen, 5.6f, 2.5f, 4.8f, 4f, 180, 180);
+                g.DrawLine(pen, 8f, 5.4f, 8f, 13.2f);
+                g.DrawLine(pen, 2.2f, 7.2f, 4.6f, 8f);
+                g.DrawLine(pen, 13.8f, 7.2f, 11.4f, 8f);
+                g.DrawLine(pen, 2.2f, 11f, 4.8f, 10.2f);
+                g.DrawLine(pen, 13.8f, 11f, 11.2f, 10.2f);
+                break;
+
+            case IconKind.Tag:
+                g.DrawPolygon(pen, new[]
+                {
+                    new PointF(2.5f, 2.5f),
+                    new PointF(8.2f, 2.5f),
+                    new PointF(13.6f, 7.9f),
+                    new PointF(7.9f, 13.6f),
+                    new PointF(2.5f, 8.2f),
+                });
+                g.FillEllipse(brush, 4.6f, 4.6f, 2f, 2f);
+                break;
+
+            case IconKind.Heart:
+            {
+                using var heart = new GraphicsPath();
+                heart.AddBezier(8f, 13.4f, 3.2f, 10.3f, 2f, 7.4f, 2.4f, 5.2f);
+                heart.AddBezier(2.4f, 5.2f, 2.8f, 3.2f, 5.6f, 2.5f, 8f, 4.8f);
+                heart.AddBezier(8f, 4.8f, 10.4f, 2.5f, 13.2f, 3.2f, 13.6f, 5.2f);
+                heart.AddBezier(13.6f, 5.2f, 14f, 7.4f, 12.8f, 10.3f, 8f, 13.4f);
+                heart.CloseFigure();
+                g.FillPath(brush, heart);
+                break;
+            }
+
+            case IconKind.Help:
+                g.DrawEllipse(pen, 2.2f, 2.2f, 11.6f, 11.6f);
+                g.DrawArc(pen, 5.6f, 4.5f, 4.8f, 4f, 180, 235);
+                g.DrawLine(pen, 8f, 8.6f, 8f, 9.6f);
+                g.FillEllipse(brush, 7.1f, 11.2f, 1.8f, 1.8f);
+                break;
+
+            case IconKind.Recent:
+                g.DrawEllipse(pen, 2.4f, 2.4f, 11.2f, 11.2f);
+                g.DrawLine(pen, 8f, 4.8f, 8f, 8.2f);
+                g.DrawLine(pen, 8f, 8.2f, 10.6f, 9.8f);
+                break;
+
+            case IconKind.ShowHide:
+                g.DrawRectangle(pen, 2.4f, 3f, 11.2f, 9.8f);
+                g.DrawLine(pen, 2.4f, 5.8f, 13.6f, 5.8f);
+                break;
+
+            case IconKind.Exit:
+                g.DrawLines(pen, new[] { new PointF(7f, 2.6f), new PointF(2.8f, 2.6f), new PointF(2.8f, 13.4f), new PointF(7f, 13.4f) });
+                g.DrawLine(pen, 6f, 8f, 13.2f, 8f);
+                g.DrawLines(pen, new[] { new PointF(10.5f, 5.2f), new PointF(13.4f, 8f), new PointF(10.5f, 10.8f) });
+                break;
+
+            case IconKind.Pin:
+                g.DrawLine(pen, 5f, 2.6f, 11f, 2.6f);
+                g.DrawLines(pen, new[] { new PointF(5.8f, 2.6f), new PointF(4.4f, 8.6f), new PointF(11.6f, 8.6f), new PointF(10.2f, 2.6f) });
+                g.DrawLine(pen, 8f, 8.6f, 8f, 13.8f);
+                break;
         }
 
         g.Restore(state);
@@ -440,4 +541,15 @@ public enum IconKind
     Highlight,
     Bookmark,
     BookmarkFilled,
+    Gem,
+    BookOpen,
+    GitHub,
+    Bug,
+    Tag,
+    Heart,
+    Help,
+    Recent,
+    ShowHide,
+    Exit,
+    Pin,
 }

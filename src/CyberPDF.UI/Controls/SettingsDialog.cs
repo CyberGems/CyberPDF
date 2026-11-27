@@ -17,6 +17,7 @@ public sealed class SettingsDialog : Form
     private readonly Action<AppTheme> _onThemeChanged;
     private readonly Action<Lang> _onLanguageChanged;
     private readonly Action _onSettingsSaved;
+    private readonly Action? _onAboutRequested;
 
     private readonly Panel _titleBar = new();
     private readonly Label _titleLabel = new();
@@ -47,12 +48,14 @@ public sealed class SettingsDialog : Form
         AppSettings settings,
         Action<AppTheme> onThemeChanged,
         Action<Lang> onLanguageChanged,
-        Action onSettingsSaved)
+        Action onSettingsSaved,
+        Action? onAboutRequested = null)
     {
         _settings = settings;
         _onThemeChanged = onThemeChanged;
         _onLanguageChanged = onLanguageChanged;
         _onSettingsSaved = onSettingsSaved;
+        _onAboutRequested = onAboutRequested;
 
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.CenterParent;
@@ -187,6 +190,11 @@ public sealed class SettingsDialog : Form
 
         _aboutLabel.Bounds = new Rectangle(pad, _okButton.Top, ClientSize.Width - pad * 3 - _okButton.Width, _okButton.Height);
         _aboutLabel.TextAlign = ContentAlignment.MiddleLeft;
+        if (_onAboutRequested is not null)
+        {
+            _aboutLabel.Cursor = Cursors.Hand;
+            _aboutLabel.Click += (_, _) => _onAboutRequested();
+        }
         Controls.Add(_aboutLabel);
     }
 

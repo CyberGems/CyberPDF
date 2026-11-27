@@ -38,7 +38,8 @@ public static class Theme
         string HighlightYellow,
         string HighlightGreen,
         string HighlightBlue,
-        string HighlightPink);
+        string HighlightPink,
+        string DonateHeart);
 
     private static readonly Dictionary<AppTheme, Palette> Palettes = new()
     {
@@ -69,7 +70,8 @@ public static class Theme
             HighlightYellow: "#78F7D64A",
             HighlightGreen: "#7849C97E",
             HighlightBlue: "#7848B8E8",
-            HighlightPink: "#78E874B0"),
+            HighlightPink: "#78E874B0",
+            DonateHeart: "#F43F5E"),
 
         [AppTheme.Gray] = new Palette(
             Bg: "#151517",
@@ -98,7 +100,8 @@ public static class Theme
             HighlightYellow: "#78E8CB4A",
             HighlightGreen: "#7857B882",
             HighlightBlue: "#785EAEE0",
-            HighlightPink: "#78DA77A6"),
+            HighlightPink: "#78DA77A6",
+            DonateHeart: "#F43F5E"),
 
         [AppTheme.Light] = new Palette(
             Bg: "#F4F1EC",
@@ -127,7 +130,8 @@ public static class Theme
             HighlightYellow: "#84F6D440",
             HighlightGreen: "#764BC47C",
             HighlightBlue: "#7646ABE0",
-            HighlightPink: "#76E26FA8"),
+            HighlightPink: "#76E26FA8",
+            DonateHeart: "#E11D48"),
     };
 
     public static AppTheme CurrentTheme { get; private set; } = AppTheme.Default;
@@ -201,6 +205,9 @@ public static class Theme
 
     /// <summary>Inverted paper color when dark reading filter is active.</summary>
     public static Color DarkPaper => FromHex(Current.DarkPaper);
+
+    /// <summary>Heart accent color for donate links and buttons.</summary>
+    public static Color DonateHeart => FromHex(Current.DonateHeart);
 
     /// <summary>User highlight color by identifier (<c>yellow</c>, <c>green</c>, <c>blue</c>, <c>pink</c>).</summary>
     public static Color HighlightColor(string? colorKey)
