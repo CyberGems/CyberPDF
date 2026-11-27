@@ -95,7 +95,9 @@ Muchos lectores ligeros arrancan rápido pero no tienen las herramientas que usa
 - Barra de estado interactiva: página anterior y siguiente, clic en el contador (`Ctrl+G`) para saltar y clic en el zoom para ajustes rápidos
 - Impresión (`Ctrl+P`), propiedades del documento (`Ctrl+D`) y recarga (`F5`)
 - Zoom de 10% a 800%, ajustar al ancho, ajustar página completa, volver al 100% y rotación en pasos de 90 grados
-- Tres temas, cambio de idioma español e inglés en vivo y configuración como lector de PDF predeterminado en Ajustes
+- Tres temas, cambio de idioma español e inglés en vivo y configuración como lector de PDF predeterminado en Ajustes (y activada por defecto en el instalador)
+- Icono en la bandeja del sistema con menú rápido temático (Mostrar/Ocultar, Abrir PDF, Ajustes, Más recientes, Ayuda, Acerca de y búsqueda de actualizaciones)
+- Diálogo Acerca de con icono oficial, comprobación de actualizaciones en GitHub, copia de diagnósticos y enlaces a las apps de la suite CyberGems
 - Una sola ventana por sesión: abrir otro PDF crea una pestaña nueva en la ventana activa
 
 ---

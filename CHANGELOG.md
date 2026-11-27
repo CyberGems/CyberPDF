@@ -4,6 +4,24 @@ All notable changes to CyberPDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project follows
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-11-27
+
+### 🇺🇸 English
+
+- System tray icon and themed context menu matching the suite layout (Show/Hide window, Open PDF, Settings, Most recent files, Help submenu, About/update check, and Exit), with `<App> · <document>` tooltip capped at 63 characters
+- Frameless About dialog matching the suite layout with official artwork, GitHub release update check, four randomized sibling CyberGems suite apps, one-click diagnostics copy, and Website/Wiki/GitHub/Issues/Releases/Donate links
+- Official CyberPDF icon assets updated across the titlebar, welcome screen, taskbar, About dialog, system tray, and installer
+- Per-user default PDF reader registration (`HKCU`) in Settings and enabled by default in the installer, opening Windows Default Apps when another reader already owns `UserChoice`
+- Inline personal bookmark renaming (double-click or right-click in the side panel) and selectable/remembered highlight color with swatch indicators on the highlighter button and context menus
+
+### 🇪🇸 Español
+
+- Icono y menú contextual temático en la bandeja del sistema siguiendo el patrón de la suite (Mostrar/Ocultar, Abrir PDF, Configuración, Más recientes, submenú Ayuda, Acerca de/actualizaciones y Salir), con tooltip de hasta 63 caracteres
+- Diálogo Acerca de adaptado al diseño de la suite con icono oficial, búsqueda de actualizaciones en GitHub, cuatro apps aleatorias de CyberGems, copia rápida de diagnósticos y enlaces a Web, Wiki, GitHub, Issues, Versiones y Donar
+- Icono oficial de CyberPDF integrado en barra de título, pantalla de inicio, barra de tareas, Acerca de, bandeja del sistema e instalador
+- Registro por usuario como lector de PDF predeterminado (`HKCU`) desde Ajustes y marcado por defecto en el instalador, abriendo Aplicaciones predeterminadas de Windows cuando otro lector ya bloquea `UserChoice`
+- Renombrado en línea de marcadores personales (doble clic o clic derecho en el panel lateral) y selector de color de resaltado recordado con muestras visuales en el botón y menús
+
 ## [0.2.0] - 2026-11-27
 
 ### 🇺🇸 English

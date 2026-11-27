@@ -95,7 +95,9 @@ Most lightweight readers either start fast but lack the tools you use every day,
 - Interactive status bar: previous and next page, click the page counter (`Ctrl+G`) to jump, click the zoom percentage for presets
 - Printing (`Ctrl+P`), document properties (`Ctrl+D`) and reload (`F5`)
 - Zoom from 10% to 800%, fit width, fit page, 100% reset and rotation in 90 degree steps
-- Three themes, live English and Spanish switching, and default PDF reader setup in Settings
+- Three themes, live English and Spanish switching, and default PDF reader setup in Settings (and checked by default in the installer)
+- System tray icon and themed quick menu (Show/Hide, Open PDF, Settings, Most recent PDFs, Help, About and update check)
+- About dialog with official icon, GitHub update check, one-click diagnostics copy and links to sibling CyberGems apps
 - One window per session: opening another PDF creates a new tab in the running window
 
 ---

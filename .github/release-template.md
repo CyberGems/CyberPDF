@@ -10,7 +10,7 @@
 <!-- COVERAGE: list every commit since the previous tag before drafting. Give every user-facing change at least one highlight and group related commits into one. Skip internal refactors, CI, tests and dependency bumps with no visible effect; keep small visible fixes such as copy, tooltips, shortcuts, themes, icons, spacing, stability and perceptible performance. Review the draft if 15+ user-facing commits produce fewer than 6 highlights, or 40+ total commits fewer than 8. Patch releases may have 1-3 highlights or a plain maintenance-only note. -->
 
 <!-- changelog-summary:start -->
-Major reading upgrade: multi-document tabs with a Start tab, continuous/single/two-page layouts with dark page mode, floating search pill, clickable PDF links, interactive status bar, and local text highlights plus personal page bookmarks.
+Desktop polish release: system tray icon and quick menu, themed About dialog with GitHub update check, official CyberPDF branding icon, default PDF reader setup, inline bookmark renaming, and remembered highlight colors.
 <!-- changelog-summary:end -->
 
 > **New to CyberPDF?** A fast, lightweight PDF reader for Windows, built to open in under half a second.
@@ -19,19 +19,18 @@ Major reading upgrade: multi-document tabs with a Start tab, continuous/single/t
 
 ### ✨ Key Features & Highlights
 
-- 📑 **Multi-document tabs & Start tab**: open multiple PDFs in one window (`Ctrl+Tab` / `Ctrl+W`), or open a new Welcome tab with recent files via `+` or `Ctrl+T`.
-- 🖍️ **Text highlights & personal bookmarks**: highlight text in four colors (`Alt+M` or context menu) and bookmark pages (`Ctrl+B`) stored locally per document in `%LOCALAPPDATA%\CyberPDF\annotations.json`, displayed in the side panel and thumbnail ribbons.
-- 📄 **Flexible reading modes**: switch between Continuous, Single Page, and Two Pages, toggle the dark-page reading filter (`Alt+N`), scroll horizontally, or pan with middle-drag / Hand tool (`Alt+H`).
-- 🔎 **Floating search pill**: top-right overlay search (`Ctrl+F`) with `Aa` match case, `ab` whole word, zero layout shift, and flicker-free tooltips.
-- 🔗 **Clickable PDF links & interactive chrome**: follow internal/external links, inspect Document Properties (`Ctrl+D`), enter passwords in a themed prompt, print (`Ctrl+P`), reload (`F5`), jump pages or zoom from the status bar, and resize the side panel edge.
-- 🎨 **Polished icons, menus & live i18n**: crisp vector icons across Default (updated moon icon), Gray, and Light themes, themed context menus on every text input, and live English/Spanish switching in Settings.
+- 🧭 **System tray icon & quick menu**: toggle window visibility, open a PDF, switch to recent documents, open Settings, or reach Help and update checks straight from the notification area.
+- 💎 **Themed About dialog & update check**: inspect the version, check GitHub Releases for updates, copy diagnostics in one click, and discover sibling apps in the CyberGems suite.
+- 🎨 **Official CyberPDF icon across the app**: sharp new icon artwork in the titlebar, welcome view, taskbar, system tray, About modal, and Windows installer.
+- 📄 **Default PDF reader setup**: register as the `.pdf` handler per user from Settings or keep the default-checked option in the installer, with direct handoff to Windows Default Apps when needed.
+- 🖍️ **Inline bookmark renaming & remembered highlight color**: double-click or right-click any personal bookmark to rename it in place, and pick a persistent default highlighter color from the toolbar swatch.
 
 <details>
 <summary><b>🇪🇸 Ver notas de la versión en Español</b></summary>
 
 ### 🚀 Novedades de esta versión
 
-Gran mejora de lectura: pestañas para múltiples documentos con pestaña de inicio, modos continuo, página única y dos páginas con modo nocturno de página, píldora flotante de búsqueda, enlaces PDF clicables, barra de estado interactiva y resaltados de texto con marcadores personales locales.
+Mejoras de escritorio y acabado: icono y menú rápido en la bandeja del sistema, diálogo Acerca de con búsqueda de actualizaciones en GitHub, icono oficial de CyberPDF, configuración como lector predeterminado, renombrado de marcadores y selector de color de resaltado.
 
 > **¿Nuevo en CyberPDF?** Un lector de PDF rápido y ligero para Windows, que abre en menos de medio segundo.
 
@@ -39,12 +38,11 @@ Gran mejora de lectura: pestañas para múltiples documentos con pestaña de ini
 
 ### ✨ Novedades destacadas
 
-- 📑 **Pestañas múltiples y pestaña de inicio**: abre varios PDF en una sola ventana (`Ctrl+Tab` / `Ctrl+W`) o abre una nueva pestaña de bienvenida con recientes usando `+` o `Ctrl+T`.
-- 🖍️ **Resaltados de texto y marcadores personales**: resalta texto en cuatro colores (`Alt+M` o menú contextual) y marca páginas (`Ctrl+B`) con guardado local por documento en `%LOCALAPPDATA%\CyberPDF\annotations.json`, visibles en el panel lateral y en las miniaturas.
-- 📄 **Modos de lectura flexibles**: alterna entre Continuo, Página única y Dos páginas, activa el filtro nocturno de página (`Alt+N`), desplázate horizontalmente o arrastra con la mano (`Alt+H`).
-- 🔎 **Píldora flotante de búsqueda**: buscador flotante arriba a la derecha (`Ctrl+F`) con `Aa`, `ab`, cero saltos de diseño y tooltips sin parpadeos.
-- 🔗 **Enlaces clicables e interfaz interactiva**: abre enlaces internos o externos, consulta Propiedades del documento (`Ctrl+D`), desbloquea archivos protegidos en un diálogo temático, imprime (`Ctrl+P`), recarga (`F5`), salta de página o zoom desde la barra de estado y ajusta el ancho del panel lateral.
-- 🎨 **Iconos, menús e idioma en vivo**: iconos vectoriales refinados en Predeterminado (luna rediseñada), Gris y Claro, menús contextuales temáticos en cada campo de texto y cambio de idioma español/inglés en vivo desde Ajustes.
+- 🧭 **Icono y menú rápido en la bandeja del sistema**: muestra u oculta la ventana, abre un PDF, accede a documentos recientes o abre Configuración, Ayuda y actualizaciones desde el área de notificaciones.
+- 💎 **Diálogo Acerca de temático y comprobación de actualizaciones**: consulta la versión, busca nuevas versiones en GitHub Releases, copia información de diagnóstico en un clic y explora otras apps de CyberGems.
+- 🎨 **Icono oficial de CyberPDF en toda la app**: nuevo icono en barra de título, bienvenida, barra de tareas, bandeja del sistema, diálogo Acerca de e instalador.
+- 📄 **Configuración como lector de PDF predeterminado**: regístrate como lector de `.pdf` por usuario desde Ajustes o con la opción marcada por defecto en el instalador, abriendo Aplicaciones predeterminadas cuando Windows lo requiera.
+- 🖍️ **Renombrado de marcadores y color de resaltado recordado**: haz doble clic o clic derecho para renombrar tus marcadores personales en línea y elige un color predeterminado para el resaltador desde la barra.
 
 ### ℹ️ Antes de instalar
 
