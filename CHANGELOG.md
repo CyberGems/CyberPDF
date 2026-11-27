@@ -4,6 +4,57 @@ All notable changes to CyberPDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project follows
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-11-27
+
+### 🇺🇸 English
+
+- Multi-document tabs above the toolbar (`Ctrl+Tab` to switch, `Ctrl+W` to
+  close, and `+` / `Ctrl+T` to open a Welcome start tab with recent files)
+- Continuous, single-page, and two-page reading modes, plus an optional dark
+  page reading filter (`Alt+N`)
+- Floating top-right search pill (`Ctrl+F`) with `Aa` match case, `ab` whole
+  word toggles, match counter, custom cue-text painting without placeholder
+  flicker, and zero layout jump
+- Lightweight reading annotations persisted locally per document in
+  `%LOCALAPPDATA%\CyberPDF\annotations.json`: four-color text highlights
+  (`Alt+M` or page context menu) and personal page bookmarks (`Ctrl+B`) shown in
+  the side panel and as thumbnail ribbons
+- Redesigned vector icons across the chrome (including a clearer Default theme
+  crescent moon), custom themed context menus on all text inputs, non-activating
+  themed tooltips with shortcut chips, and live English/Spanish switching in
+  Settings
+- Clickable internal and external PDF links with link target previews in an
+  interactive status bar (prev/next page, click page counter for `Ctrl+G` jump,
+  click zoom percentage for presets)
+- Document properties dialog (`Ctrl+D`), themed password dialog for encrypted
+  PDFs, printing (`Ctrl+P`), reload (`F5`), horizontal scrolling with middle-drag
+  and hand pan (`Alt+H`), and drag-resizable side panel
+
+### 🇪🇸 Español
+
+- Pestañas para múltiples documentos sobre la barra de herramientas (`Ctrl+Tab`
+  para alternar, `Ctrl+W` para cerrar y `+` / `Ctrl+T` para abrir una pestaña
+  de inicio con archivos recientes)
+- Modos de lectura continuo, página única y dos páginas, más un filtro nocturno
+  de lectura opcional (`Alt+N`)
+- Píldora flotante de búsqueda arriba a la derecha (`Ctrl+F`) con botones `Aa` y
+  `ab`, contador de coincidencias, texto guía sin parpadeos al pasar el puntero
+  y sin saltos de diseño
+- Anotaciones ligeras de lectura guardadas localmente por documento en
+  `%LOCALAPPDATA%\CyberPDF\annotations.json`: resaltados de texto en cuatro
+  colores (`Alt+M` o menú contextual) y marcadores personales (`Ctrl+B`) en el
+  panel lateral y en las miniaturas
+- Iconos vectoriales rediseñados en toda la interfaz (incluida una luna
+  creciente más clara en el tema Predeterminado), menús contextuales temáticos
+  en todos los campos de texto, tooltips con atajos sin pérdida de foco y cambio
+  de idioma español/inglés en vivo desde Ajustes
+- Enlaces internos y externos clicables con vista previa del destino en una
+  barra de estado interactiva (página anterior/siguiente, salto con `Ctrl+G` y
+  preajustes de zoom)
+- Propiedades del documento (`Ctrl+D`), diálogo temático de contraseña,
+  impresión (`Ctrl+P`), recarga (`F5`), desplazamiento horizontal con botón
+  central y herramienta mano (`Alt+H`), y panel lateral redimensionable
+
 ## [0.1.0] - 2026-11-25
 
 ### 🇺🇸 English

@@ -19,14 +19,14 @@ CyberPDF; el zip portátil es una carpeta que descomprimes y ejecutas.
 
 Lector activo con tres temas y dos idiomas. Abre varios PDF en pestañas,
 renderiza en modos continuo, página única o dos páginas, se desplaza en
-vertical y horizontal, hace zoom y gira, selecciona y copia texto, abre enlaces
-internos y externos, busca con resaltado, imprime y recuerda el estado por
-documento.
+vertical y horizontal, hace zoom y gira, selecciona, copia y resalta texto,
+guarda marcadores personales de página, abre enlaces internos y externos, busca
+con una barra flotante, imprime y recuerda el estado por documento.
 
 ## Qué funciona hoy
 
-- Pantalla de inicio con lista de documentos recientes y soporte de arrastrar y
-  soltar
+- Pantalla de inicio y nueva pestaña (`+` o `Ctrl+T`) con documentos recientes
+  y soporte de arrastrar y soltar
 - Múltiples documentos abiertos en pestañas (`Ctrl+Tab` para cambiar, `Ctrl+W`
   para cerrar pestaña)
 - Abre documentos desde el diálogo, arrastrando o por línea de comandos, con
@@ -36,14 +36,18 @@ documento.
 - Desplazamiento vertical y horizontal con barras temáticas, rueda del ratón
   (`Ctrl+Rueda` para zoom, `Shift+Rueda` en horizontal), teclado, botón central
   y herramienta mano (`Alt+H`)
-- Selecciona y copia texto: arrastra, doble clic para una palabra, triple clic
-  para una línea, con menús contextuales temáticos con iconos
+- Selecciona, copia y resalta texto en cuatro colores (Amarillo, Verde, Azul y
+  Rosa con `Alt+M` o desde el menú contextual), guardados por documento en
+  `%LOCALAPPDATA%\CyberPDF\annotations.json`
+- Marcadores personales por página (`Ctrl+B` o menú contextual) mostrados en el
+  panel lateral sobre el índice del documento y con una cinta en miniaturas
 - Enlaces clicables dentro del PDF (saltos internos de página y enlaces web o
   mailto)
-- Búsqueda en todo el documento con opciones de mayúsculas y palabra completa;
-  `Ctrl+F` abre la barra, `Enter` y `Shift+Enter` recorren las coincidencias
-- Panel lateral con miniaturas y marcadores del documento (`F4`), borde
-  redimensionable y estado recordado por documento
+- Píldora flotante de búsqueda arriba a la derecha (`Ctrl+F`) con opciones de
+  mayúsculas (`Aa`) y palabra completa (`ab`), contador y `Enter` /
+  `Shift+Enter` sin provocar saltos de diseño
+- Panel lateral con miniaturas y marcadores (`F4`), borde redimensionable y
+  estado recordado por documento
 - Barra de estado interactiva: página anterior/siguiente, clic en el contador
   (`Ctrl+G`) para ir a cualquier página y clic en el zoom para ajustes rápidos
 - Impresión (`Ctrl+P`), propiedades del documento (`Ctrl+D`) y recarga (`F5`)
@@ -151,6 +155,9 @@ CyberPDF.exe --shot salida.png documento.pdf
 | `Shift+F3` | Coincidencia anterior |
 | `Ctrl+C` | Copiar la selección |
 | `Ctrl+A` | Seleccionar la página actual |
+| `Alt+M` | Resaltar la selección |
+| `Ctrl+B` | Alternar marcador en la página actual |
+| `Ctrl+T` | Abrir una nueva pestaña de inicio |
 | `Ctrl+Tab` | Siguiente pestaña abierta |
 | `Ctrl+W` | Cerrar pestaña activa o ventana |
 | `F11` | Maximizar / restaurar |

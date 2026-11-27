@@ -10,7 +10,7 @@
 <!-- COVERAGE: list every commit since the previous tag before drafting. Give every user-facing change at least one highlight and group related commits into one. Skip internal refactors, CI, tests and dependency bumps with no visible effect; keep small visible fixes such as copy, tooltips, shortcuts, themes, icons, spacing, stability and perceptible performance. Review the draft if 15+ user-facing commits produce fewer than 6 highlights, or 40+ total commits fewer than 8. Patch releases may have 1-3 highlights or a plain maintenance-only note. -->
 
 <!-- changelog-summary:start -->
-First release: a native PDF reader with continuous scrolling, fit-width zoom, rotation, text selection with copy, full-document search, and three themes in English and Spanish.
+Major reading upgrade: multi-document tabs with a Start tab, continuous/single/two-page layouts with dark page mode, floating search pill, clickable PDF links, interactive status bar, and local text highlights plus personal page bookmarks.
 <!-- changelog-summary:end -->
 
 > **New to CyberPDF?** A fast, lightweight PDF reader for Windows, built to open in under half a second.
@@ -19,19 +19,19 @@ First release: a native PDF reader with continuous scrolling, fit-width zoom, ro
 
 ### ✨ Key Features & Highlights
 
-- 📖 **Reads PDFs in one window**: continuous scrolling, zoom from 10% to 800%, fit width, and rotation in 90 degree steps.
-- 📋 **Select and copy text**: drag to select, double click for a word, triple click for a line, Ctrl+C to copy.
-- 🔎 **Search with highlighting**: Ctrl+F finds every match in the document, highlights all of them, and F3 jumps between results.
-- 🎨 **Three themes**: Default, Gray and Light, switchable from the title bar.
-- 🌍 **English and Spanish**, following Windows by default.
-- 🪶 **Small and fast**: opens in about a quarter of a second and uses 20-50 MB of memory.
+- 📑 **Multi-document tabs & Start tab**: open multiple PDFs in one window (`Ctrl+Tab` / `Ctrl+W`), or open a new Welcome tab with recent files via `+` or `Ctrl+T`.
+- 🖍️ **Text highlights & personal bookmarks**: highlight text in four colors (`Alt+M` or context menu) and bookmark pages (`Ctrl+B`) stored locally per document in `%LOCALAPPDATA%\CyberPDF\annotations.json`, displayed in the side panel and thumbnail ribbons.
+- 📄 **Flexible reading modes**: switch between Continuous, Single Page, and Two Pages, toggle the dark-page reading filter (`Alt+N`), scroll horizontally, or pan with middle-drag / Hand tool (`Alt+H`).
+- 🔎 **Floating search pill**: top-right overlay search (`Ctrl+F`) with `Aa` match case, `ab` whole word, zero layout shift, and flicker-free tooltips.
+- 🔗 **Clickable PDF links & interactive chrome**: follow internal/external links, inspect Document Properties (`Ctrl+D`), enter passwords in a themed prompt, print (`Ctrl+P`), reload (`F5`), jump pages or zoom from the status bar, and resize the side panel edge.
+- 🎨 **Polished icons, menus & live i18n**: crisp vector icons across Default (updated moon icon), Gray, and Light themes, themed context menus on every text input, and live English/Spanish switching in Settings.
 
 <details>
 <summary><b>🇪🇸 Ver notas de la versión en Español</b></summary>
 
 ### 🚀 Novedades de esta versión
 
-Primera versión: un lector de PDF nativo con desplazamiento continuo, zoom ajustado al ancho, rotación, selección de texto con copia, búsqueda en todo el documento y tres temas en inglés y español.
+Gran mejora de lectura: pestañas para múltiples documentos con pestaña de inicio, modos continuo, página única y dos páginas con modo nocturno de página, píldora flotante de búsqueda, enlaces PDF clicables, barra de estado interactiva y resaltados de texto con marcadores personales locales.
 
 > **¿Nuevo en CyberPDF?** Un lector de PDF rápido y ligero para Windows, que abre en menos de medio segundo.
 
@@ -39,12 +39,12 @@ Primera versión: un lector de PDF nativo con desplazamiento continuo, zoom ajus
 
 ### ✨ Novedades destacadas
 
-- 📖 **Lee PDFs en una ventana**: desplazamiento continuo, zoom de 10% a 800%, ajustar al ancho y rotación en pasos de 90 grados.
-- 📋 **Selecciona y copia texto**: arrastra para seleccionar, doble clic para una palabra, triple clic para una línea, Ctrl+C para copiar.
-- 🔎 **Búsqueda con resaltado**: Ctrl+F encuentra todas las coincidencias del documento, las resalta y F3 salta entre los resultados.
-- 🎨 **Tres temas**: Predeterminado, Gris y Claro, desde la barra de título.
-- 🌍 **Inglés y español**, siguiendo Windows por defecto.
-- 🪶 **Pequeño y rápido**: abre en un cuarto de segundo y usa 20-50 MB de memoria.
+- 📑 **Pestañas múltiples y pestaña de inicio**: abre varios PDF en una sola ventana (`Ctrl+Tab` / `Ctrl+W`) o abre una nueva pestaña de bienvenida con recientes usando `+` o `Ctrl+T`.
+- 🖍️ **Resaltados de texto y marcadores personales**: resalta texto en cuatro colores (`Alt+M` o menú contextual) y marca páginas (`Ctrl+B`) con guardado local por documento en `%LOCALAPPDATA%\CyberPDF\annotations.json`, visibles en el panel lateral y en las miniaturas.
+- 📄 **Modos de lectura flexibles**: alterna entre Continuo, Página única y Dos páginas, activa el filtro nocturno de página (`Alt+N`), desplázate horizontalmente o arrastra con la mano (`Alt+H`).
+- 🔎 **Píldora flotante de búsqueda**: buscador flotante arriba a la derecha (`Ctrl+F`) con `Aa`, `ab`, cero saltos de diseño y tooltips sin parpadeos.
+- 🔗 **Enlaces clicables e interfaz interactiva**: abre enlaces internos o externos, consulta Propiedades del documento (`Ctrl+D`), desbloquea archivos protegidos en un diálogo temático, imprime (`Ctrl+P`), recarga (`F5`), salta de página o zoom desde la barra de estado y ajusta el ancho del panel lateral.
+- 🎨 **Iconos, menús e idioma en vivo**: iconos vectoriales refinados en Predeterminado (luna rediseñada), Gris y Claro, menús contextuales temáticos en cada campo de texto y cambio de idioma español/inglés en vivo desde Ajustes.
 
 ### ℹ️ Antes de instalar
 

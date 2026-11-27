@@ -17,13 +17,14 @@ CyberPDF; the portable zip is a folder you unzip and run.
 
 Active reader in three themes and two languages. It opens multiple PDFs in
 tabs, renders in continuous, single-page or two-page layouts, scrolls
-vertically and horizontally, zooms and rotates, selects and copies text, clicks
-internal and external links, searches with highlighting, prints, and remembers
-state per document.
+vertically and horizontally, zooms and rotates, selects, copies and highlights
+text, saves personal page bookmarks, clicks internal and external links, searches
+with a floating bar, prints, and remembers state per document.
 
 ## What works today
 
-- Start screen with a recent documents list and drag-and-drop support
+- Start screen and new tab view (`+` or `Ctrl+T`) with recent documents and
+  drag-and-drop support
 - Multiple open documents in tabs (`Ctrl+Tab` to switch, `Ctrl+W` to close tab)
 - Opens a document by dialog, drag and drop, or the command line, with a
   themed password prompt for protected files
@@ -32,13 +33,17 @@ state per document.
 - Smooth vertical and horizontal scrolling with themed scrollbars, mouse wheel
   (`Ctrl+Wheel` to zoom, `Shift+Wheel` horizontally), keyboard, middle-drag and
   hand pan tool (`Alt+H`)
-- Select and copy text: drag, double click for a word, triple click for a line,
-  themed context menus with icons
+- Select, copy and highlight text in four colors (Yellow, Green, Blue, Pink via
+  `Alt+M` or the page context menu), persisted per document in
+  `%LOCALAPPDATA%\CyberPDF\annotations.json`
+- Personal page bookmarks (`Ctrl+B` or context menu) shown in the side panel
+  above the document outline and marked with a ribbon on page thumbnails
 - Clickable PDF links (internal page jumps and external web or mailto links)
-- Search the whole document with match case and whole word toggles; `Ctrl+F`
-  opens the bar, `Enter` and `Shift+Enter` walk matches
-- Side panel with page thumbnails and document bookmarks (`F4`), resizable edge
-  and remembered state per document
+- Floating top-right search pill (`Ctrl+F`) with match case (`Aa`) and whole
+  word (`ab`) toggles, match counter, and `Enter` / `Shift+Enter` navigation
+  without shifting the page layout
+- Side panel with page thumbnails and bookmarks (`F4`), resizable edge and
+  remembered state per document
 - Interactive status bar: previous/next page, click page counter (`Ctrl+G`) to
   jump to any page, click zoom percentage for presets
 - Printing (`Ctrl+P`), document properties (`Ctrl+D`) and reload (`F5`)
@@ -145,6 +150,9 @@ CyberPDF.exe --shot out.png document.pdf
 | `Shift+F3` | Previous match |
 | `Ctrl+C` | Copy the selection |
 | `Ctrl+A` | Select the current page |
+| `Alt+M` | Highlight the selection |
+| `Ctrl+B` | Toggle bookmark on current page |
+| `Ctrl+T` | Open a new start tab |
 | `Ctrl+Tab` | Next open tab |
 | `Ctrl+W` | Close active tab or window |
 | `F11` | Maximize / restore |
