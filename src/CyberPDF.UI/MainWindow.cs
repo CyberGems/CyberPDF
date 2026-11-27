@@ -25,6 +25,9 @@ public sealed class MainWindow : Form
     private readonly PdfEngine _engine;
     private readonly AppSettings _settings;
     private readonly SettingsStore _store;
+    private readonly AnnotationStore _annotationStore = new();
+    private readonly AnnotationSet _annotations;
+    private DocumentAnnotations _currentAnnotations = new();
 
     private readonly Panel _titleBar = new();
     private readonly Panel _titleIconBox = new();
@@ -53,6 +56,8 @@ public sealed class MainWindow : Form
     private readonly ToolButton _handToolButton = new();
     private readonly ToolButton _themeButton = new();
     private readonly ToolButton _copyButton = new();
+    private readonly ToolButton _highlightButton = new();
+    private readonly ToolButton _bookmarkButton = new();
     private readonly ToolButton _searchButton = new();
     private readonly ToolButton _printButton = new();
     private readonly ToolButton _settingsButton = new();
@@ -94,6 +99,7 @@ public sealed class MainWindow : Form
         _engine = engine;
         _settings = settings;
         _store = store;
+        _annotations = _annotationStore.Load();
         _viewer = new PageViewer(engine);
         _sidePanel = new SidePanel(engine);
 
@@ -250,6 +256,11 @@ public sealed class MainWindow : Form
         ConfigureButton(_handToolButton, IconKind.Hand, null, ToggleHandTool);
         ConfigureButton(_copyButton, IconKind.Copy, Strings.Get("Copy"), CopySelection);
         _copyButton.Enabled = false;
+        ConfigureButton(_highlightButton, IconKind.Highlight, null, () => AddHighlight(HighlightColors.Yellow));
+        _highlightButton.AccessibleName = Strings.Get("Highlight");
+        _highlightButton.Enabled = false;
+        ConfigureButton(_bookmarkButton, IconKind.Bookmark, null, ToggleCurrentPageBookmark);
+        _bookmarkButton.AccessibleName = Strings.Get("ToggleBookmark");
         ConfigureButton(_searchButton, IconKind.Search, null, OpenSearch);
         ConfigureButton(_printButton, IconKind.Print, null, PrintDocument);
         ConfigureButton(_sidePanelButton, IconKind.SidePanel, null, ToggleSidePanel);
@@ -274,6 +285,8 @@ public sealed class MainWindow : Form
         flow.Controls.Add(_rotateRightButton);
         flow.Controls.Add(_handToolButton);
         flow.Controls.Add(_copyButton);
+        flow.Controls.Add(_highlightButton);
+        flow.Controls.Add(_bookmarkButton);
         flow.Controls.Add(Separator());
         flow.Controls.Add(_searchButton);
         flow.Controls.Add(_printButton);
@@ -962,6 +975,8 @@ public sealed class MainWindow : Form
         _toolTip.Attach(_rotateRightButton, () => Strings.Get("RotateRight"), () => "Ctrl+R");
         _toolTip.Attach(_handToolButton, () => _viewer.ActiveTool == ViewerTool.Pan ? Strings.Get("SelectTool") : Strings.Get("HandTool"), () => "Alt+H");
         _toolTip.Attach(_copyButton, () => Strings.Get("Copy"), () => "Ctrl+C");
+        _toolTip.Attach(_highlightButton, () => Strings.Get("Highlight"), () => "Alt+M");
+        _toolTip.Attach(_bookmarkButton, () => IsCurrentPageBookmarked() ? Strings.Get("RemoveBookmark") : Strings.Get("AddBookmark"), () => "Ctrl+B");
         _toolTip.Attach(_prevPageButton, () => Strings.Get("PreviousPage"), null);
         _toolTip.Attach(_nextPageButton, () => Strings.Get("NextPage"), null);
         _toolTip.Attach(_pageLabel, () => Strings.Get("GoToPage"), () => "Ctrl+G");
@@ -1055,6 +1070,7 @@ public sealed class MainWindow : Form
         _viewer.SelectionChanged += (_, _) => UpdateSelectionState();
         _viewer.ViewStateChanged += (_, _) =>
         {
+            UpdateBookmarkButtonState();
             if (_sidePanel.Visible)
             {
                 _sidePanel.SetCurrentPage(_viewer.FirstVisiblePage);
@@ -1062,6 +1078,7 @@ public sealed class MainWindow : Form
             }
         };
         _sidePanel.PageRequested += (_, page) => _viewer.ScrollToPage(page);
+        _sidePanel.PersonalBookmarkDeleteRequested += (_, page) => RemovePersonalBookmark(page);
         _sidePanel.ModeChanged += (_, _) =>
         {
             _settings.SidePanelTab = _sidePanel.Mode;
@@ -1233,6 +1250,7 @@ public sealed class MainWindow : Form
         RememberRecent(path);
         _welcomeView.SetRecentFiles(_settings.RecentFiles);
         ApplyStoredViewState(path);
+        LoadDocumentAnnotations(path);
 
         var stored = _settings.RememberPagePosition
                      && _settings.ViewStates.TryGetValue(path, out var state)
@@ -1326,6 +1344,7 @@ public sealed class MainWindow : Form
         }
 
         Text = $"{Path.GetFileName(target.FilePath)} — {Strings.Get("AppTitle")}";
+        LoadDocumentAnnotations(target.FilePath);
         SyncTabStrip();
         SyncScrollBar();
         UpdateCommandStates();
@@ -1409,6 +1428,7 @@ public sealed class MainWindow : Form
             _linkHoverPreview = null;
             _viewer.SetDocument(null);
             _viewer.Visible = false;
+            ClearDocumentAnnotations();
             _welcomeView.Visible = true;
             _sidePanel.SetDocument(null);
             _sidePanel.Visible = false;
@@ -1658,6 +1678,7 @@ public sealed class MainWindow : Form
         if (visible)
         {
             _sidePanel.SetDocument(_document);
+            _sidePanel.SetPersonalBookmarks(_currentAnnotations.Bookmarks);
             _sidePanel.SetTab(_settings.SidePanelTab);
             _sidePanel.SetCurrentPage(_viewer.FirstVisiblePage);
             _sidePanel.EnsureAround(_viewer.FirstVisiblePage);
@@ -1802,8 +1823,128 @@ public sealed class MainWindow : Form
 
     private void UpdateSelectionState()
     {
-        _copyButton.Enabled = _viewer.HasSelection;
+        var canActOnSelection = _document is not null && !_showingStartTab && _viewer.HasSelection;
+        _copyButton.Enabled = canActOnSelection;
+        _highlightButton.Enabled = canActOnSelection;
         UpdateStatus();
+    }
+
+    private void LoadDocumentAnnotations(string path)
+    {
+        _currentAnnotations = AnnotationStore.GetForDocument(_annotations, path);
+        _viewer.SetHighlights(_currentAnnotations.Highlights);
+        _sidePanel.SetPersonalBookmarks(_currentAnnotations.Bookmarks);
+        UpdateBookmarkButtonState();
+    }
+
+    private void ClearDocumentAnnotations()
+    {
+        _currentAnnotations = new DocumentAnnotations();
+        _viewer.SetHighlights(null);
+        _sidePanel.SetPersonalBookmarks(null);
+        UpdateBookmarkButtonState();
+    }
+
+    private void PersistCurrentAnnotations()
+    {
+        if (_documentPath is null)
+        {
+            return;
+        }
+        AnnotationStore.SetForDocument(_annotations, _documentPath, _currentAnnotations);
+        if (!_suppressPersistenceOnClose)
+        {
+            _annotationStore.Save(_annotations);
+        }
+    }
+
+    private bool IsCurrentPageBookmarked()
+    {
+        if (_document is null || _showingStartTab)
+        {
+            return false;
+        }
+        var page = _viewer.FirstVisiblePage;
+        return _currentAnnotations.Bookmarks.Any(b => b.PageIndex == page);
+    }
+
+    private void UpdateBookmarkButtonState()
+    {
+        var active = IsCurrentPageBookmarked();
+        _bookmarkButton.IsActive = active;
+        _bookmarkButton.Icon = active ? IconKind.BookmarkFilled : IconKind.Bookmark;
+    }
+
+    private void AddHighlight(string color)
+    {
+        if (_document is null || _showingStartTab || _viewer.Selection is not { IsEmpty: false } selection)
+        {
+            return;
+        }
+
+        var snippet = _viewer.GetSelectedText().Trim();
+        if (snippet.Length > 120)
+        {
+            snippet = snippet.Substring(0, 120);
+        }
+
+        _currentAnnotations.Highlights.Add(new TextHighlight
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            PageIndex = selection.PageIndex,
+            Start = selection.Start,
+            Length = selection.Length,
+            Color = HighlightColors.Normalize(color),
+            Snippet = snippet,
+        });
+
+        PersistCurrentAnnotations();
+        _viewer.SetHighlights(_currentAnnotations.Highlights);
+        _viewer.ClearSelection();
+    }
+
+    private void RemoveHighlight(TextHighlight highlight)
+    {
+        if (_currentAnnotations.Highlights.RemoveAll(h => string.Equals(h.Id, highlight.Id, StringComparison.Ordinal) ||
+                (h.PageIndex == highlight.PageIndex && h.Start == highlight.Start && h.Length == highlight.Length)) > 0)
+        {
+            PersistCurrentAnnotations();
+            _viewer.SetHighlights(_currentAnnotations.Highlights);
+        }
+    }
+
+    private void ToggleCurrentPageBookmark()
+    {
+        if (_document is null || _showingStartTab)
+        {
+            return;
+        }
+
+        var page = _viewer.FirstVisiblePage;
+        if (_currentAnnotations.Bookmarks.RemoveAll(b => b.PageIndex == page) == 0)
+        {
+            _currentAnnotations.Bookmarks.Add(new PersonalBookmark
+            {
+                PageIndex = page,
+                Label = Strings.Format("BookmarkPageLabel", page + 1),
+                CreatedUtcTicks = DateTime.UtcNow.Ticks,
+            });
+            _currentAnnotations.Bookmarks.Sort((a, b) => a.PageIndex.CompareTo(b.PageIndex));
+        }
+
+        PersistCurrentAnnotations();
+        _sidePanel.SetPersonalBookmarks(_currentAnnotations.Bookmarks);
+        UpdateBookmarkButtonState();
+    }
+
+    private void RemovePersonalBookmark(int pageIndex)
+    {
+        if (_currentAnnotations.Bookmarks.RemoveAll(b => b.PageIndex == pageIndex) > 0)
+        {
+            PersistCurrentAnnotations();
+            _sidePanel.SetPersonalBookmarks(_currentAnnotations.Bookmarks);
+            UpdateBookmarkButtonState();
+        }
     }
 
     /// <summary>Copies the selected text to the clipboard.</summary>
@@ -1830,28 +1971,52 @@ public sealed class MainWindow : Form
 
     /// <summary>
     /// Shows the page context menu. A reader expects Copy and Select all here,
-    /// themed like the rest of the app instead of the Windows menu.
+    /// plus highlight actions when text is selected or hovered over a highlight.
     /// </summary>
-    private void ShowPageContextMenu(Point screenLocation)
+    private void ShowPageContextMenu(Point screenLocation, Point viewerLocation)
     {
-        if (_document is null)
+        if (_document is null || _showingStartTab)
         {
             return;
         }
 
-        var menu = ThemedContextMenu.Create(
-            new ContextMenuItem(Strings.Get("Copy"), CopySelection, IconKind.Copy, _viewer.HasSelection),
-            new ContextMenuItem(Strings.Get("SelectAll"), () => _viewer.SelectAllOnCurrentPage(), IconKind.SelectAll, true),
-            ContextMenuItem.Separator(),
-            new ContextMenuItem(Strings.Get("Print"), PrintDocument, IconKind.Print, true));
-        menu.Show(screenLocation);
+        var items = new List<ContextMenuItem>
+        {
+            new(Strings.Get("Copy"), CopySelection, IconKind.Copy, _viewer.HasSelection),
+            new(Strings.Get("SelectAll"), () => _viewer.SelectAllOnCurrentPage(), IconKind.SelectAll, true),
+        };
+
+        if (_viewer.HasSelection)
+        {
+            items.Add(ContextMenuItem.Separator());
+            items.Add(new ContextMenuItem($"{Strings.Get("Highlight")} ({Strings.Get("HighlightYellow")})", () => AddHighlight(HighlightColors.Yellow), IconKind.Highlight, true));
+            items.Add(new ContextMenuItem($"{Strings.Get("Highlight")} ({Strings.Get("HighlightGreen")})", () => AddHighlight(HighlightColors.Green), IconKind.Highlight, true));
+            items.Add(new ContextMenuItem($"{Strings.Get("Highlight")} ({Strings.Get("HighlightBlue")})", () => AddHighlight(HighlightColors.Blue), IconKind.Highlight, true));
+            items.Add(new ContextMenuItem($"{Strings.Get("Highlight")} ({Strings.Get("HighlightPink")})", () => AddHighlight(HighlightColors.Pink), IconKind.Highlight, true));
+        }
+        else if (_viewer.HitTestHighlight(viewerLocation) is { } existing)
+        {
+            items.Add(ContextMenuItem.Separator());
+            items.Add(new ContextMenuItem(Strings.Get("RemoveHighlight"), () => RemoveHighlight(existing), IconKind.Close, true));
+        }
+
+        items.Add(ContextMenuItem.Separator());
+        var bookmarked = IsCurrentPageBookmarked();
+        items.Add(new ContextMenuItem(
+            bookmarked ? Strings.Get("RemoveBookmark") : Strings.Get("AddBookmark"),
+            ToggleCurrentPageBookmark,
+            bookmarked ? IconKind.BookmarkFilled : IconKind.Bookmark,
+            true));
+        items.Add(new ContextMenuItem(Strings.Get("Print"), PrintDocument, IconKind.Print, true));
+
+        ThemedContextMenu.Create(items.ToArray()).Show(screenLocation);
     }
 
     private void ViewerMouseUpForContextMenu(object? sender, MouseEventArgs e)
     {
         if (e.Button == MouseButtons.Right && _document is not null)
         {
-            ShowPageContextMenu(Cursor.Position);
+            ShowPageContextMenu(Cursor.Position, e.Location);
         }
     }
 
@@ -2238,6 +2403,8 @@ public sealed class MainWindow : Form
         _settingsButton.AccessibleName = Strings.Get("Settings");
         _viewModeButton.AccessibleName = Strings.Get("ViewMode");
         _darkPageButton.AccessibleName = Strings.Get("DarkPageMode");
+        _highlightButton.AccessibleName = Strings.Get("Highlight");
+        _bookmarkButton.AccessibleName = Strings.Get("ToggleBookmark");
 
         _welcomeView.RefreshLocalization();
         _sidePanel.Invalidate();
@@ -2386,6 +2553,9 @@ public sealed class MainWindow : Form
         _handToolButton.Enabled = hasDocument;
         _handToolButton.IsActive = hasDocument && _viewer.ActiveTool == ViewerTool.Pan;
         _copyButton.Enabled = hasDocument && _viewer.HasSelection;
+        _highlightButton.Enabled = hasDocument && _viewer.HasSelection;
+        _bookmarkButton.Enabled = hasDocument;
+        UpdateBookmarkButtonState();
         _searchButton.Enabled = hasDocument;
         _printButton.Enabled = hasDocument;
         _sidePanelButton.Enabled = hasDocument;
@@ -2636,6 +2806,14 @@ public sealed class MainWindow : Form
                 break;
             case Keys.N when e.Alt:
                 ToggleDarkPageMode();
+                e.Handled = true;
+                break;
+            case Keys.M when e.Alt:
+                AddHighlight(HighlightColors.Yellow);
+                e.Handled = true;
+                break;
+            case Keys.B when e.Control:
+                ToggleCurrentPageBookmark();
                 e.Handled = true;
                 break;
             case Keys.F4:

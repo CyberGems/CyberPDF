@@ -1,4 +1,5 @@
 using CyberPDF.Common.I18n;
+using CyberPDF.Common.Settings;
 using CyberPDF.Core.Documents;
 using CyberPDF.Core.Rendering;
 using CyberPDF.UI.Theming;
@@ -28,10 +29,13 @@ public sealed class SidePanel : Control
     private readonly PdfEngine _engine;
     private readonly List<ThumbnailSlot> _thumbnails = new();
     private readonly List<BookmarkEntry> _bookmarks = new();
+    private readonly List<PersonalBookmark> _personalBookmarks = new();
+    private readonly HashSet<int> _personalBookmarkPages = new();
     private readonly Dictionary<int, Bitmap> _thumbCache = new();
     private readonly List<int> _thumbOrder = new();
     private readonly ThinScrollBar _scroll;
     private const int SplitterWidth = 5;
+    private const int DeleteButtonWidth = 22;
     private bool _resizing;
     private bool _hoverSplitter;
     private int _resizeStartX;
@@ -42,6 +46,7 @@ public sealed class SidePanel : Control
     private int _currentPage;
     private int _hoverIndex = -1;
     private int _hoverBookmark = -1;
+    private bool _hoverBookmarkDelete;
     private int _hoverTab = -1;
     private int _requestedCount;
 
@@ -82,9 +87,12 @@ public sealed class SidePanel : Control
     /// <summary>Raised once when the drag ends, so the width is written once.</summary>
     public event EventHandler? ResizeCompleted;
 
+    /// <summary>Raised when the user clicks the remove button on a personal bookmark row.</summary>
+    public event EventHandler<int>? PersonalBookmarkDeleteRequested;
+
     public int Mode => _mode;
 
-    public int BookmarkCount => _bookmarks.Count;
+    public int BookmarkCount => _bookmarks.Count + _personalBookmarks.Count;
 
     public int ThumbnailCount => _thumbCache.Count;
 
@@ -105,6 +113,8 @@ public sealed class SidePanel : Control
     {
         _document = document;
         _bookmarks.Clear();
+        _personalBookmarks.Clear();
+        _personalBookmarkPages.Clear();
         ClearThumbnails();
         _currentPage = 0;
         _scroll.Value = 0;
@@ -153,6 +163,26 @@ public sealed class SidePanel : Control
                 Invalidate();
             },
             error => Console.Error.WriteLine($"BOOKMARKS: {error.Message}"));
+    }
+
+    /// <summary>Replaces the personal user bookmarks shown in the panel and thumbnail ribbons.</summary>
+    public void SetPersonalBookmarks(IReadOnlyList<PersonalBookmark>? bookmarks)
+    {
+        _personalBookmarks.Clear();
+        _personalBookmarkPages.Clear();
+        if (bookmarks is not null)
+        {
+            foreach (var bookmark in bookmarks.OrderBy(b => b.PageIndex))
+            {
+                if (bookmark is null || bookmark.PageIndex < 0 || !_personalBookmarkPages.Add(bookmark.PageIndex))
+                {
+                    continue;
+                }
+                _personalBookmarks.Add(bookmark);
+            }
+        }
+        UpdateScrollBar();
+        Invalidate();
     }
 
     /// <summary>Marks the page the viewport is on; the thumbnail list highlights it.</summary>
@@ -338,7 +368,7 @@ public sealed class SidePanel : Control
         {
             if (IsBookmarks)
             {
-                return Math.Max(0, _bookmarks.Count * RowHeight + ThumbMargin);
+                return Math.Max(0, BuildBookmarkRows().Count * RowHeight + ThumbMargin);
             }
             var total = ThumbMargin;
             foreach (var slot in _thumbnails)
@@ -466,6 +496,11 @@ public sealed class SidePanel : Control
                 g.DrawRectangle(pen, paper);
             }
 
+            if (_personalBookmarkPages.Contains(slot.PageIndex))
+            {
+                DrawBookmarkRibbon(g, paper);
+            }
+
             using var font = new Font("Segoe UI", 8.5f, selected ? FontStyle.Bold : FontStyle.Regular);
             ThemePainter.DrawCenteredText(
                 g,
@@ -476,9 +511,62 @@ public sealed class SidePanel : Control
         }
     }
 
+    private static void DrawBookmarkRibbon(Graphics g, Rectangle paper)
+    {
+        var x = paper.Right - 13;
+        var y = paper.Top;
+        var pts = new[]
+        {
+            new Point(x, y),
+            new Point(x + 9, y),
+            new Point(x + 9, y + 13),
+            new Point(x + 4, y + 9),
+            new Point(x, y + 13),
+        };
+        ThemePainter.PrepareHighQuality(g);
+        using var fill = new SolidBrush(Theme.Accent);
+        g.FillPolygon(fill, pts);
+    }
+
+    private readonly record struct BookmarkListRow(bool IsHeader, bool IsPersonal, int PageIndex, int Depth, string Title);
+
+    private List<BookmarkListRow> BuildBookmarkRows()
+    {
+        var rows = new List<BookmarkListRow>(_personalBookmarks.Count + _bookmarks.Count + 2);
+        if (_personalBookmarks.Count > 0)
+        {
+            rows.Add(new BookmarkListRow(true, true, -1, 0, Strings.Get("MyBookmarks")));
+            foreach (var b in _personalBookmarks)
+            {
+                var label = string.IsNullOrWhiteSpace(b.Label)
+                    ? Strings.Format("BookmarkPageLabel", b.PageIndex + 1)
+                    : b.Label;
+                rows.Add(new BookmarkListRow(false, true, b.PageIndex, 0, label));
+            }
+        }
+
+        if (_bookmarks.Count > 0)
+        {
+            if (_personalBookmarks.Count > 0)
+            {
+                rows.Add(new BookmarkListRow(true, false, -1, 0, Strings.Get("DocumentOutline")));
+            }
+            foreach (var entry in _bookmarks)
+            {
+                rows.Add(new BookmarkListRow(false, false, entry.PageIndex, entry.Depth, entry.Title));
+            }
+        }
+
+        return rows;
+    }
+
+    private static Rectangle DeleteButtonBounds(Rectangle row)
+        => new(row.Right - DeleteButtonWidth - 4, row.Top + (row.Height - DeleteButtonWidth) / 2, DeleteButtonWidth, DeleteButtonWidth);
+
     private void DrawBookmarks(Graphics g)
     {
-        if (_bookmarks.Count == 0)
+        var rows = BuildBookmarkRows();
+        if (rows.Count == 0)
         {
             using var font = new Font("Segoe UI", 9f);
             ThemePainter.DrawCenteredText(
@@ -491,14 +579,26 @@ public sealed class SidePanel : Control
         }
 
         var top = TabHeight - _scroll.Value;
-        for (var i = 0; i < _bookmarks.Count; i++)
+        for (var i = 0; i < rows.Count; i++)
         {
-            var entry = _bookmarks[i];
-            var row = new Rectangle(0, top, Width - _scroll.Width, RowHeight);
+            var entry = rows[i];
+            var row = new Rectangle(0, top, Width - SplitterWidth - _scroll.Width, RowHeight);
             top += RowHeight;
 
             if (row.Bottom < TabHeight || row.Top > Height)
             {
+                continue;
+            }
+
+            if (entry.IsHeader)
+            {
+                using var headerFont = new Font("Segoe UI", 7.75f, FontStyle.Bold);
+                using var headerBrush = new SolidBrush(Theme.TextMuted);
+                using var sep = new Pen(Theme.Border);
+                var headerBounds = new Rectangle(ThumbMargin, row.Top, Math.Max(10, row.Width - ThumbMargin * 2), row.Height);
+                TextRenderer.DrawText(g, entry.Title, headerFont, headerBounds, Theme.TextMuted,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+                g.DrawLine(sep, ThumbMargin, row.Bottom - 1, row.Right - ThumbMargin, row.Bottom - 1);
                 continue;
             }
 
@@ -509,9 +609,18 @@ public sealed class SidePanel : Control
             }
 
             var indent = ThumbMargin + entry.Depth * 14;
+            if (entry.IsPersonal)
+            {
+                var iconBox = new Rectangle(indent, row.Top + (row.Height - 14) / 2, 14, 14);
+                Icons.Draw(g, IconKind.BookmarkFilled, iconBox, Theme.Accent);
+                indent += 18;
+            }
+
+            var deleteReserve = entry.IsPersonal ? DeleteButtonWidth + 6 : 6;
             using var font = new Font("Segoe UI", 9f);
-            var textBounds = new Rectangle(indent, row.Top, Math.Max(10, row.Width - indent - 6), row.Height);
-            using var brush = new SolidBrush(entry.PageIndex == _currentPage ? Theme.Text : Theme.TextMuted);
+            var textBounds = new Rectangle(indent, row.Top, Math.Max(10, row.Width - indent - deleteReserve), row.Height);
+            var active = entry.PageIndex == _currentPage;
+            using var brush = new SolidBrush(active ? Theme.Text : Theme.TextMuted);
             using var format = new StringFormat
             {
                 LineAlignment = StringAlignment.Center,
@@ -520,6 +629,17 @@ public sealed class SidePanel : Control
                 FormatFlags = StringFormatFlags.NoWrap,
             };
             g.DrawString(entry.Title, font, brush, textBounds, format);
+
+            if (entry.IsPersonal && i == _hoverBookmark)
+            {
+                var delBounds = DeleteButtonBounds(row);
+                if (_hoverBookmarkDelete)
+                {
+                    using var delBg = new SolidBrush(Theme.Pressed);
+                    ThemePainter.FillRounded(g, delBounds, 4, Theme.Pressed);
+                }
+                Icons.Draw(g, IconKind.Close, Rectangle.Inflate(delBounds, -4, -4), _hoverBookmarkDelete ? Theme.Text : Theme.TextMuted);
+            }
         }
     }
 
@@ -548,10 +668,22 @@ public sealed class SidePanel : Control
 
         if (IsBookmarks)
         {
+            var rows = BuildBookmarkRows();
             var index = (e.Y + _scroll.Value - TabHeight) / RowHeight;
-            if (index >= 0 && index < _bookmarks.Count)
+            if (index >= 0 && index < rows.Count && !rows[index].IsHeader)
             {
-                PageRequested?.Invoke(this, _bookmarks[index].PageIndex);
+                var entry = rows[index];
+                if (entry.IsPersonal)
+                {
+                    var rowY = TabHeight - _scroll.Value + index * RowHeight;
+                    var rowRect = new Rectangle(0, rowY, Width - SplitterWidth - _scroll.Width, RowHeight);
+                    if (DeleteButtonBounds(rowRect).Contains(e.Location))
+                    {
+                        PersonalBookmarkDeleteRequested?.Invoke(this, entry.PageIndex);
+                        return;
+                    }
+                }
+                PageRequested?.Invoke(this, entry.PageIndex);
             }
             return;
         }
@@ -607,16 +739,25 @@ public sealed class SidePanel : Control
 
         if (IsBookmarks)
         {
+            var rows = BuildBookmarkRows();
             var index = e.Y < TabHeight
                 ? -1
                 : (e.Y + _scroll.Value - TabHeight) / RowHeight;
-            if (index >= _bookmarks.Count)
+            if (index >= rows.Count || (index >= 0 && rows[index].IsHeader))
             {
                 index = -1;
             }
-            if (index != _hoverBookmark)
+            var onDelete = false;
+            if (index >= 0 && rows[index].IsPersonal)
+            {
+                var rowY = TabHeight - _scroll.Value + index * RowHeight;
+                var rowRect = new Rectangle(0, rowY, Width - SplitterWidth - _scroll.Width, RowHeight);
+                onDelete = DeleteButtonBounds(rowRect).Contains(e.Location);
+            }
+            if (index != _hoverBookmark || onDelete != _hoverBookmarkDelete)
             {
                 _hoverBookmark = index;
+                _hoverBookmarkDelete = onDelete;
                 Cursor = index >= 0 ? Cursors.Hand : Cursors.Default;
                 Invalidate();
             }
@@ -649,6 +790,7 @@ public sealed class SidePanel : Control
         base.OnMouseLeave(e);
         _hoverIndex = -1;
         _hoverBookmark = -1;
+        _hoverBookmarkDelete = false;
         _hoverTab = -1;
         _hoverSplitter = false;
         Cursor = Cursors.Default;

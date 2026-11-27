@@ -135,6 +135,20 @@ public static class Strings
         ["CopiedCharacters"] = ("Copied {0} characters.", "Se copiaron {0} caracteres."),
         ["SelectTextHint"] = ("Drag to select text. Middle-drag to scroll.", "Arrastra para seleccionar texto. Arrastra con el botón central para desplazarte."),
 
+        // Annotations
+        ["Highlight"] = ("Highlight", "Resaltar"),
+        ["RemoveHighlight"] = ("Remove highlight", "Quitar resaltado"),
+        ["HighlightYellow"] = ("Yellow", "Amarillo"),
+        ["HighlightGreen"] = ("Green", "Verde"),
+        ["HighlightBlue"] = ("Blue", "Azul"),
+        ["HighlightPink"] = ("Pink", "Rosa"),
+        ["ToggleBookmark"] = ("Toggle bookmark", "Alternar marcador"),
+        ["AddBookmark"] = ("Bookmark this page", "Marcar esta página"),
+        ["RemoveBookmark"] = ("Remove bookmark", "Quitar marcador"),
+        ["MyBookmarks"] = ("My bookmarks", "Mis marcadores"),
+        ["DocumentOutline"] = ("Document outline", "Índice del documento"),
+        ["BookmarkPageLabel"] = ("Page {0}", "Página {0}"),
+
         // Common dialog buttons
         ["Cancel"] = ("Cancel", "Cancelar"),
         ["Accept"] = ("Accept", "Aceptar"),

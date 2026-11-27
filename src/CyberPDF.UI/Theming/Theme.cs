@@ -34,7 +34,11 @@ public static class Theme
         string ScrollThumb,
         string ScrollThumbHover,
         string SearchMatch,
-        string SearchMatchActive);
+        string SearchMatchActive,
+        string HighlightYellow,
+        string HighlightGreen,
+        string HighlightBlue,
+        string HighlightPink);
 
     private static readonly Dictionary<AppTheme, Palette> Palettes = new()
     {
@@ -61,7 +65,11 @@ public static class Theme
             ScrollThumb: "#2C3B4C",
             ScrollThumbHover: "#3E536A",
             SearchMatch: "#66E0B341",
-            SearchMatchActive: "#B3F2A03D"),
+            SearchMatchActive: "#B3F2A03D",
+            HighlightYellow: "#78F7D64A",
+            HighlightGreen: "#7849C97E",
+            HighlightBlue: "#7848B8E8",
+            HighlightPink: "#78E874B0"),
 
         [AppTheme.Gray] = new Palette(
             Bg: "#151517",
@@ -86,7 +94,11 @@ public static class Theme
             ScrollThumb: "#3A3A42",
             ScrollThumbHover: "#4E4E58",
             SearchMatch: "#66C9A227",
-            SearchMatchActive: "#B3E0B93A"),
+            SearchMatchActive: "#B3E0B93A",
+            HighlightYellow: "#78E8CB4A",
+            HighlightGreen: "#7857B882",
+            HighlightBlue: "#785EAEE0",
+            HighlightPink: "#78DA77A6"),
 
         [AppTheme.Light] = new Palette(
             Bg: "#F4F1EC",
@@ -111,7 +123,11 @@ public static class Theme
             ScrollThumb: "#C4BCB0",
             ScrollThumbHover: "#A9A093",
             SearchMatch: "#66E8C547",
-            SearchMatchActive: "#B3F2B01E"),
+            SearchMatchActive: "#B3F2B01E",
+            HighlightYellow: "#84F6D440",
+            HighlightGreen: "#764BC47C",
+            HighlightBlue: "#7646ABE0",
+            HighlightPink: "#76E26FA8"),
     };
 
     public static AppTheme CurrentTheme { get; private set; } = AppTheme.Default;
@@ -185,6 +201,18 @@ public static class Theme
 
     /// <summary>Inverted paper color when dark reading filter is active.</summary>
     public static Color DarkPaper => FromHex(Current.DarkPaper);
+
+    /// <summary>User highlight color by identifier (<c>yellow</c>, <c>green</c>, <c>blue</c>, <c>pink</c>).</summary>
+    public static Color HighlightColor(string? colorKey)
+    {
+        return HighlightColors.Normalize(colorKey) switch
+        {
+            HighlightColors.Green => FromHex(Current.HighlightGreen),
+            HighlightColors.Blue => FromHex(Current.HighlightBlue),
+            HighlightColors.Pink => FromHex(Current.HighlightPink),
+            _ => FromHex(Current.HighlightYellow),
+        };
+    }
 
     private static Color FromHex(string hex)
     {

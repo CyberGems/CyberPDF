@@ -1,5 +1,6 @@
 using System.Drawing.Imaging;
 using CyberPDF.Common.I18n;
+using CyberPDF.Common.Settings;
 using CyberPDF.Core.Documents;
 using CyberPDF.Core.Rendering;
 using CyberPDF.Core.Search;
@@ -74,6 +75,9 @@ public sealed class PageViewer : Control
     /// </summary>
     private readonly HashSet<int> _searchedPages = new();
     private readonly Dictionary<int, List<PdfRect>> _highlightCache = new();
+    private readonly List<TextHighlight> _userHighlights = [];
+    private readonly HashSet<int> _highlightedPages = [];
+    private readonly Dictionary<string, List<PdfRect>> _userHighlightRectCache = new(StringComparer.Ordinal);
 
     private PdfDocument? _document;
     private DocumentLayout? _layout;
@@ -212,6 +216,7 @@ public sealed class PageViewer : Control
         _hoveredLink = null;
         LinkHovered?.Invoke(this, null);
         _highlightCache.Clear();
+        _userHighlightRectCache.Clear();
         _searchTexts.Clear();
         _searchedPages.Clear();
         _searchTerm = string.Empty;
@@ -245,6 +250,7 @@ public sealed class PageViewer : Control
         _hoveredLink = null;
         LinkHovered?.Invoke(this, null);
         _highlightCache.Clear();
+        _userHighlightRectCache.Clear();
         _searchTexts.Clear();
         _searchedPages.Clear();
         _searchTerm = string.Empty;
@@ -411,6 +417,79 @@ public sealed class PageViewer : Control
         _selection = null;
         Invalidate();
         SelectionChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Replaces the persisted text highlights rendered over the document.</summary>
+    public void SetHighlights(IReadOnlyList<TextHighlight>? highlights)
+    {
+        _userHighlights.Clear();
+        _highlightedPages.Clear();
+        _userHighlightRectCache.Clear();
+
+        if (highlights is not null)
+        {
+            foreach (var highlight in highlights)
+            {
+                if (highlight is null || highlight.PageIndex < 0 || highlight.Start < 0 || highlight.Length <= 0)
+                {
+                    continue;
+                }
+                _userHighlights.Add(highlight);
+                _highlightedPages.Add(highlight.PageIndex);
+            }
+        }
+
+        if (_document is not null && _layout is not null && _highlightedPages.Count > 0)
+        {
+            var top = Math.Max(0, _scrollY - ClientSize.Height);
+            var bottom = _scrollY + ClientSize.Height * 2;
+            foreach (var slot in _layout.VisiblePages(top, bottom))
+            {
+                if (_highlightedPages.Contains(slot.PageIndex) && !_textLayers.ContainsKey(slot.PageIndex))
+                {
+                    EnsureTextLayer(slot.PageIndex, Invalidate);
+                }
+            }
+        }
+
+        Invalidate();
+    }
+
+    /// <summary>
+    /// Returns the topmost user highlight at <paramref name="clientPoint"/>, or
+    /// <see langword="null"/> when no highlight is hit.
+    /// </summary>
+    public TextHighlight? HitTestHighlight(Point clientPoint)
+    {
+        if (_userHighlights.Count == 0 || HitTestPdfPoint(clientPoint) is not var (pageIndex, pdfX, pdfY))
+        {
+            return null;
+        }
+        if (!_highlightedPages.Contains(pageIndex) || !_textLayers.TryGetValue(pageIndex, out var layer))
+        {
+            return null;
+        }
+
+        const double tolerance = 1.5;
+        for (var i = _userHighlights.Count - 1; i >= 0; i--)
+        {
+            var highlight = _userHighlights[i];
+            if (highlight.PageIndex != pageIndex)
+            {
+                continue;
+            }
+
+            foreach (var rect in GetUserHighlightRects(highlight, layer))
+            {
+                if (pdfX >= rect.Left - tolerance && pdfX <= rect.Right + tolerance &&
+                    pdfY >= rect.Bottom - tolerance && pdfY <= rect.Top + tolerance)
+                {
+                    return highlight;
+                }
+            }
+        }
+
+        return null;
     }
 
     /// <summary>Current search term, empty when no search is active.</summary>
@@ -841,6 +920,10 @@ public sealed class PageViewer : Control
         foreach (var slot in _layout.VisiblePages(top, bottom))
         {
             EnsureLinkLayer(slot.PageIndex);
+            if (_highlightedPages.Contains(slot.PageIndex) && !_textLayers.ContainsKey(slot.PageIndex))
+            {
+                EnsureTextLayer(slot.PageIndex, Invalidate);
+            }
             if (_failedPages.Contains(slot.PageIndex))
             {
                 continue;
@@ -1078,9 +1161,91 @@ public sealed class PageViewer : Control
             }
 
             // Overlays belong to the real paint path, not only to screenshots.
-            // Search hits go first so an explicit selection stays readable on top.
+            // User highlights sit underneath search hits and active selection.
+            DrawUserHighlights(graphics, slot, left, top);
             DrawSearchHighlights(graphics, slot, left, top);
             DrawSelection(graphics, slot, left, top);
+        }
+    }
+
+    private void DrawUserHighlights(Graphics graphics, PageSlot slot, int pageLeft, int pageTop)
+    {
+        if (_document is null || !_highlightedPages.Contains(slot.PageIndex))
+        {
+            return;
+        }
+        if (!_textLayers.TryGetValue(slot.PageIndex, out var layer))
+        {
+            EnsureTextLayer(slot.PageIndex, Invalidate);
+            return;
+        }
+
+        var size = _document.GetPageSize(slot.PageIndex);
+        var transform = new PageTransform(size, slot.Width, slot.Height, _rotation);
+        var brushes = new Dictionary<string, SolidBrush>(StringComparer.Ordinal);
+        try
+        {
+            foreach (var highlight in _userHighlights)
+            {
+                if (highlight.PageIndex != slot.PageIndex)
+                {
+                    continue;
+                }
+
+                var key = HighlightColors.Normalize(highlight.Color);
+                if (!brushes.TryGetValue(key, out var brush))
+                {
+                    brush = new SolidBrush(Theme.HighlightColor(key));
+                    brushes[key] = brush;
+                }
+
+                FillPdfRects(graphics, transform, brush, GetUserHighlightRects(highlight, layer), pageLeft, pageTop);
+            }
+        }
+        finally
+        {
+            foreach (var brush in brushes.Values)
+            {
+                brush.Dispose();
+            }
+        }
+    }
+
+    private List<PdfRect> GetUserHighlightRects(TextHighlight highlight, PageTextLayer layer)
+    {
+        var cacheKey = $"{highlight.PageIndex}:{highlight.Start}:{highlight.Length}";
+        if (_userHighlightRectCache.TryGetValue(cacheKey, out var cached))
+        {
+            return cached;
+        }
+
+        var rects = TextSelectionEngine.BuildHighlightRects(
+            layer,
+            new TextSelection(highlight.PageIndex, highlight.Start, highlight.Length));
+        _userHighlightRectCache[cacheKey] = rects;
+        return rects;
+    }
+
+    private static void FillPdfRects(
+        Graphics graphics,
+        PageTransform transform,
+        Brush brush,
+        IEnumerable<PdfRect> rects,
+        int pageLeft,
+        int pageTop)
+    {
+        foreach (var rect in rects)
+        {
+            // Same corner mapping as the selection: a rotation swaps which
+            // corner ends up top-left, so min and max are what keep the fill
+            // on the glyphs.
+            var cornerA = transform.PdfToView(rect.Left, rect.Top);
+            var cornerB = transform.PdfToView(rect.Right, rect.Bottom);
+            var x = pageLeft + (int)Math.Floor(Math.Min(cornerA.X, cornerB.X));
+            var y = pageTop + (int)Math.Floor(Math.Min(cornerA.Y, cornerB.Y));
+            var width = Math.Max(1, (int)Math.Ceiling(Math.Abs(cornerB.X - cornerA.X)));
+            var height = Math.Max(1, (int)Math.Ceiling(Math.Abs(cornerB.Y - cornerA.Y)));
+            graphics.FillRectangle(brush, x, y, width, height);
         }
     }
 
@@ -1126,20 +1291,7 @@ public sealed class PageViewer : Control
             var rects = TextSelectionEngine.BuildHighlightRects(
                 layer,
                 new TextSelection(slot.PageIndex, match.Start, match.Length));
-
-            foreach (var rect in rects)
-            {
-                // Same corner mapping as the selection: a rotation swaps which
-                // corner ends up top-left, so min and max are what keep the fill
-                // on the glyphs.
-                var cornerA = transform.PdfToView(rect.Left, rect.Top);
-                var cornerB = transform.PdfToView(rect.Right, rect.Bottom);
-                var x = pageLeft + (int)Math.Floor(Math.Min(cornerA.X, cornerB.X));
-                var y = pageTop + (int)Math.Floor(Math.Min(cornerA.Y, cornerB.Y));
-                var width = Math.Max(1, (int)Math.Ceiling(Math.Abs(cornerB.X - cornerA.X)));
-                var height = Math.Max(1, (int)Math.Ceiling(Math.Abs(cornerB.Y - cornerA.Y)));
-                graphics.FillRectangle(brush, x, y, width, height);
-            }
+            FillPdfRects(graphics, transform, brush, rects, pageLeft, pageTop);
         }
     }
 
