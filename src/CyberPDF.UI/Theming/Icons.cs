@@ -238,15 +238,19 @@ public static class Icons
                 break;
 
             case IconKind.Settings:
-                g.DrawEllipse(pen, 5.6f, 5.6f, 4.8f, 4.8f);
-                for (var i = 0; i < 8; i++)
+                g.DrawEllipse(pen, 6f, 6f, 4f, 4f);
+                g.DrawEllipse(pen, 3.6f, 3.6f, 8.8f, 8.8f);
+                using (var toothPen = new Pen(color, stroke * 1.45f) { StartCap = LineCap.Flat, EndCap = LineCap.Flat })
                 {
-                    var angle = Math.PI * i / 4;
-                    var x1 = 8f + (float)Math.Cos(angle) * 4.7f;
-                    var y1 = 8f + (float)Math.Sin(angle) * 4.7f;
-                    var x2 = 8f + (float)Math.Cos(angle) * 6.5f;
-                    var y2 = 8f + (float)Math.Sin(angle) * 6.5f;
-                    g.DrawLine(pen, x1, y1, x2, y2);
+                    for (var i = 0; i < 6; i++)
+                    {
+                        var angle = Math.PI * i / 3;
+                        var x1 = 8f + (float)Math.Cos(angle) * 4.2f;
+                        var y1 = 8f + (float)Math.Sin(angle) * 4.2f;
+                        var x2 = 8f + (float)Math.Cos(angle) * 6.8f;
+                        var y2 = 8f + (float)Math.Sin(angle) * 6.8f;
+                        g.DrawLine(toothPen, x1, y1, x2, y2);
+                    }
                 }
                 break;
 

@@ -177,11 +177,47 @@ internal static partial class PdfiumNative
     [LibraryImport(Library)]
     internal static partial int FPDFDest_GetDestPageIndex(nint document, nint dest);
 
+    // --- Links & metadata ---------------------------------------------------
+
+    internal const uint ActionGoTo = 1;
+    internal const uint ActionUri = 3;
+
+    [LibraryImport(Library)]
+    internal static partial int FPDFLink_Enumerate(nint page, ref int startPos, out nint linkAnnot);
+
+    [LibraryImport(Library)]
+    internal static partial int FPDFLink_GetAnnotRect(nint linkAnnot, out FsRectF rect);
+
+    [LibraryImport(Library)]
+    internal static partial nint FPDFLink_GetDest(nint document, nint linkAnnot);
+
+    [LibraryImport(Library)]
+    internal static partial nint FPDFLink_GetAction(nint linkAnnot);
+
+    [LibraryImport(Library)]
+    internal static partial uint FPDFAction_GetType(nint action);
+
+    [LibraryImport(Library)]
+    internal static partial uint FPDFAction_GetURIPath(nint document, nint action, nint buffer, uint buflen);
+
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial uint FPDF_GetMetaText(nint document, string tag, nint buffer, uint buflen);
+
     /// <summary>PDFium's own size struct: two consecutive floats.</summary>
     [StructLayout(LayoutKind.Sequential)]
     internal struct FsSizeF
     {
         public float Width;
         public float Height;
+    }
+
+    /// <summary>PDFium's own rect struct in page space (points).</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct FsRectF
+    {
+        public float Left;
+        public float Top;
+        public float Right;
+        public float Bottom;
     }
 }

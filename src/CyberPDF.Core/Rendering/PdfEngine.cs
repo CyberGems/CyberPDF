@@ -100,6 +100,24 @@ public sealed class PdfEngine : IDisposable
     }
 
     /// <summary>
+    /// Reads link annotations for a single page on the PDFium thread.
+    /// </summary>
+    public bool GetLinks(PdfDocument document, int pageIndex, Action<PageLinkLayer> completed, Action<Exception>? onError = null)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        return Enqueue(new LinkWorkItem(document, pageIndex, completed, onError));
+    }
+
+    /// <summary>
+    /// Reads document metadata fields on the PDFium thread.
+    /// </summary>
+    public bool GetMetadata(PdfDocument document, Action<PdfMetadata> completed, Action<Exception>? onError = null)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        return Enqueue(new MetadataWorkItem(document, completed, onError));
+    }
+
+    /// <summary>
     /// Destroys the document on the PDFium thread, after every request already
     /// queued for it. Closing from the UI thread would race the renderer.
     /// </summary>
@@ -425,6 +443,66 @@ public sealed class PdfEngine : IDisposable
             if (TrySettle())
             {
                 _completed(bookmarks);
+            }
+        }
+
+        public override void Fail(Exception error) => _onError?.Invoke(error);
+    }
+
+    private sealed class LinkWorkItem : WorkItem
+    {
+        private readonly PdfDocument _document;
+        private readonly int _pageIndex;
+        private readonly Action<PageLinkLayer> _completed;
+        private readonly Action<Exception>? _onError;
+
+        public LinkWorkItem(PdfDocument document, int pageIndex, Action<PageLinkLayer> completed, Action<Exception>? onError)
+        {
+            _document = document;
+            _pageIndex = pageIndex;
+            _completed = completed;
+            _onError = onError;
+        }
+
+        public override void Run(PdfEngine engine)
+        {
+            if (_document.IsDisposed)
+            {
+                return;
+            }
+            var links = LinkReader.Read(_document, _pageIndex);
+            if (TrySettle())
+            {
+                _completed(links);
+            }
+        }
+
+        public override void Fail(Exception error) => _onError?.Invoke(error);
+    }
+
+    private sealed class MetadataWorkItem : WorkItem
+    {
+        private readonly PdfDocument _document;
+        private readonly Action<PdfMetadata> _completed;
+        private readonly Action<Exception>? _onError;
+
+        public MetadataWorkItem(PdfDocument document, Action<PdfMetadata> completed, Action<Exception>? onError)
+        {
+            _document = document;
+            _completed = completed;
+            _onError = onError;
+        }
+
+        public override void Run(PdfEngine engine)
+        {
+            if (_document.IsDisposed)
+            {
+                return;
+            }
+            var metadata = MetadataReader.Read(_document);
+            if (TrySettle())
+            {
+                _completed(metadata);
             }
         }
 

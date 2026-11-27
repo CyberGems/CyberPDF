@@ -50,6 +50,8 @@ public sealed class MainWindow : Form
     private readonly ToolButton _themeButton = new();
     private readonly ToolButton _copyButton = new();
     private readonly ToolButton _searchButton = new();
+    private readonly ToolButton _printButton = new();
+    private readonly ToolButton _settingsButton = new();
     private readonly Panel _searchBar = new();
     private readonly Panel _searchBoxHost = new();
     private readonly UndoableTextBox _searchField = new();
@@ -78,6 +80,7 @@ public sealed class MainWindow : Form
     private int _rotation;
     private bool _updatingScrollBar;
     private bool _fitPageActive;
+    private string? _linkHoverPreview;
 
     public MainWindow(PdfEngine engine, AppSettings settings, SettingsStore store)
     {
@@ -239,7 +242,14 @@ public sealed class MainWindow : Form
         ConfigureButton(_copyButton, IconKind.Copy, Strings.Get("Copy"), CopySelection);
         _copyButton.Enabled = false;
         ConfigureButton(_searchButton, IconKind.Search, null, OpenSearch);
+        ConfigureButton(_printButton, IconKind.Print, null, PrintDocument);
         ConfigureButton(_sidePanelButton, IconKind.SidePanel, null, ToggleSidePanel);
+
+        _settingsButton.Icon = IconKind.Settings;
+        _settingsButton.Dock = DockStyle.Right;
+        _settingsButton.Width = 42;
+        _settingsButton.AccessibleName = Strings.Get("Settings");
+        _settingsButton.Click += (_, _) => ShowSettingsMenu();
 
         flow.Controls.Add(_openButton);
         flow.Controls.Add(_sidePanelButton);
@@ -255,8 +265,10 @@ public sealed class MainWindow : Form
         flow.Controls.Add(_copyButton);
         flow.Controls.Add(Separator());
         flow.Controls.Add(_searchButton);
+        flow.Controls.Add(_printButton);
 
         _toolbar.Controls.Add(flow);
+        _toolbar.Controls.Add(_settingsButton);
     }
 
     private static Panel Separator() => new Panel
@@ -935,6 +947,8 @@ public sealed class MainWindow : Form
         _toolTip.Attach(_pageLabel, () => Strings.Get("GoToPage"), () => "Ctrl+G");
         _toolTip.Attach(_zoomLabel, () => Strings.Get("ZoomLevel"), null);
         _toolTip.Attach(_searchButton, () => Strings.Get("Search"), () => "Ctrl+F");
+        _toolTip.Attach(_printButton, () => Strings.Get("Print"), () => "Ctrl+P");
+        _toolTip.Attach(_settingsButton, () => Strings.Get("Settings"), null);
         _toolTip.Attach(_sidePanelButton, () => Strings.Get("ToggleSidePanel"), () => "F4");
         _toolTip.Attach(_themeButton, () => Strings.Get("ChangeTheme"), () => "Alt+T");
         _toolTip.Attach(_minimizeButton, () => Strings.Get("Minimize"), null);
@@ -968,6 +982,12 @@ public sealed class MainWindow : Form
             _viewer.ScrollHorizontalTo(_hScrollBar.Value);
         };
         _viewer.ZoomRequested += (_, factor) => ChangeZoom(factor);
+        _viewer.LinkHovered += (_, preview) =>
+        {
+            _linkHoverPreview = preview;
+            UpdateStatus();
+        };
+        _viewer.LinkPageRequested += (_, _) => SaveViewState();
 
         _welcomeView.OpenRequested += (_, _) => OpenFile();
         _welcomeView.FileRequested += (_, path) => OpenDocument(path);
@@ -1068,10 +1088,10 @@ public sealed class MainWindow : Form
         }
     }
 
-    public void OpenDocument(string path)
+    public void OpenDocument(string path, string? password = null)
     {
         UpdateStatus(Strings.Get("Loading"));
-        _engine.OpenDocument(path, null, result =>
+        _engine.OpenDocument(path, password, result =>
         {
             if (IsDisposed)
             {
@@ -1085,6 +1105,19 @@ public sealed class MainWindow : Form
     {
         if (!result.Success)
         {
+            if (result.Error is PdfOpenError.PasswordRequired or PdfOpenError.WrongPassword)
+            {
+                using var dialog = new PasswordDialog(
+                    Path.GetFileName(path),
+                    wrongPassword: result.Error == PdfOpenError.WrongPassword);
+                if (dialog.ShowDialog(this) == DialogResult.OK)
+                {
+                    OpenDocument(path, dialog.Password);
+                    return;
+                }
+                UpdateStatus();
+                return;
+            }
             ShowOpenError(result.Error, result.PdfiumError);
             return;
         }
@@ -1507,7 +1540,9 @@ public sealed class MainWindow : Form
 
         var menu = ThemedContextMenu.Create(
             new ContextMenuItem(Strings.Get("Copy"), CopySelection, IconKind.Copy, _viewer.HasSelection),
-            new ContextMenuItem(Strings.Get("SelectAll"), () => _viewer.SelectAllOnCurrentPage(), IconKind.SelectAll, true));
+            new ContextMenuItem(Strings.Get("SelectAll"), () => _viewer.SelectAllOnCurrentPage(), IconKind.SelectAll, true),
+            ContextMenuItem.Separator(),
+            new ContextMenuItem(Strings.Get("Print"), PrintDocument, IconKind.Print, true));
         menu.Show(screenLocation);
     }
 
@@ -1746,6 +1781,149 @@ public sealed class MainWindow : Form
         menu.Show(anchor.X, anchor.Y - menu.PreferredSize.Height);
     }
 
+    private void PrintDocument()
+    {
+        if (_document is null)
+        {
+            return;
+        }
+        PdfPrintService.Print(this, _engine, _document, _documentPath);
+    }
+
+    private void ReloadDocument()
+    {
+        if (_documentPath is null || !File.Exists(_documentPath))
+        {
+            return;
+        }
+        SaveViewState();
+        OpenDocument(_documentPath);
+    }
+
+    private void CloseCurrentDocument()
+    {
+        if (_document is null)
+        {
+            return;
+        }
+        SaveViewState();
+        var closing = _document;
+        _document = null;
+        _documentPath = null;
+        _linkHoverPreview = null;
+        _viewer.SetDocument(null);
+        _viewer.Visible = false;
+        _welcomeView.Visible = true;
+        _sidePanel.SetDocument(null);
+        _sidePanel.Visible = false;
+        _engine.CloseDocument(closing);
+        SyncScrollBar();
+        UpdateCommandStates();
+        UpdateStatus();
+    }
+
+    private void ShowDocumentProperties()
+    {
+        if (_document is null)
+        {
+            return;
+        }
+        var doc = _document;
+        var path = _documentPath;
+        _engine.GetMetadata(
+            doc,
+            metadata =>
+            {
+                if (IsDisposed)
+                {
+                    return;
+                }
+                BeginInvoke(() =>
+                {
+                    if (IsDisposed || doc != _document)
+                    {
+                        return;
+                    }
+                    using var dialog = new DocumentPropertiesDialog(doc, metadata, path);
+                    dialog.ShowDialog(this);
+                });
+            },
+            error => Core.Diagnostics.AppLog.Warn($"Metadata read failed: {error.Message}"));
+    }
+
+    private void ShowSettingsDialog()
+    {
+        using var dialog = new SettingsDialog(
+            _settings,
+            theme =>
+            {
+                _settings.Theme = theme;
+                Theme.Apply(theme);
+                ApplyTheme();
+                _store.Save(_settings);
+            },
+            lang => ApplyLanguage(lang),
+            () => _store.Save(_settings));
+        dialog.ShowDialog(this);
+    }
+
+    private void ShowSettingsMenu()
+    {
+        var hasDoc = _document is not null;
+        var menu = ThemedContextMenu.Create(
+            new ContextMenuItem(Strings.Get("ReloadDocument"), ReloadDocument, IconKind.Reload, hasDoc),
+            new ContextMenuItem(Strings.Get("CloseDocument"), CloseCurrentDocument, IconKind.Close, hasDoc),
+            new ContextMenuItem(Strings.Get("DocumentProperties"), ShowDocumentProperties, IconKind.Info, hasDoc),
+            new ContextMenuItem(Strings.Get("Print"), PrintDocument, IconKind.Print, hasDoc),
+            ContextMenuItem.Separator(),
+            new ContextMenuItem(Strings.Get("LanguageEn"), () => ApplyLanguage(Lang.En), Strings.Current == Lang.En ? IconKind.Check : IconKind.None),
+            new ContextMenuItem(Strings.Get("LanguageEs"), () => ApplyLanguage(Lang.Es), Strings.Current == Lang.Es ? IconKind.Check : IconKind.None),
+            ContextMenuItem.Separator(),
+            new ContextMenuItem(Strings.Get("Settings"), ShowSettingsDialog, IconKind.Settings));
+
+        var anchor = _settingsButton.PointToScreen(new Point(_settingsButton.Width - menu.PreferredSize.Width, _settingsButton.Height));
+        menu.Show(anchor);
+    }
+
+    private void ApplyLanguage(Lang lang)
+    {
+        if (Strings.Current == lang)
+        {
+            return;
+        }
+        Strings.Current = lang;
+        _settings.Language = lang == Lang.Es ? "es" : "en";
+        _store.Save(_settings);
+        RefreshLocalization();
+    }
+
+    private void RefreshLocalization()
+    {
+        _openButton.Text = Strings.Get("Open");
+        _copyButton.Text = Strings.Get("Copy");
+        _searchField.PlaceholderText = Strings.Get("SearchPlaceholder");
+        _themeButton.AccessibleName = Strings.Get("ChangeTheme");
+        _minimizeButton.AccessibleName = Strings.Get("Minimize");
+        _maximizeButton.AccessibleName = WindowState == FormWindowState.Maximized
+            ? Strings.Get("Restore")
+            : Strings.Get("Maximize");
+        _closeButton.AccessibleName = Strings.Get("CloseWindow");
+        _prevPageButton.AccessibleName = Strings.Get("PreviousPage");
+        _nextPageButton.AccessibleName = Strings.Get("NextPage");
+        _searchCloseButton.AccessibleName = Strings.Get("SearchClear");
+        _matchCaseButton.AccessibleName = Strings.Get("MatchCase");
+        _wholeWordButton.AccessibleName = Strings.Get("WholeWord");
+        _printButton.AccessibleName = Strings.Get("Print");
+        _settingsButton.AccessibleName = Strings.Get("Settings");
+
+        _welcomeView.RefreshLocalization();
+        _sidePanel.Invalidate();
+        UpdateSearchState();
+        UpdateStatus();
+        RescaleChrome();
+        InvalidateTitleBar();
+    }
+
     private void CycleTheme()
     {
         var next = Theme.CurrentTheme switch
@@ -1796,6 +1974,8 @@ public sealed class MainWindow : Form
         _pageJumpField.BackColor = Theme.Canvas;
         _pageJumpField.ForeColor = Theme.Text;
         _handToolButton.Invalidate();
+        _printButton.Invalidate();
+        _settingsButton.Invalidate();
         _titleIconBox.Invalidate();
 
         foreach (Control control in _toolbar.Controls)
@@ -1847,13 +2027,13 @@ public sealed class MainWindow : Form
         }
 
         var page = Math.Min(_viewer.FirstVisiblePage + 1, _document.PageCount);
-        _pageLabel.Text = Strings.Format("PageOf", page, _document.PageCount);
+        _pageLabel.Text = _linkHoverPreview ?? Strings.Format("PageOf", page, _document.PageCount);
         _pageLabel.Cursor = Cursors.Hand;
         _zoomLabel.Text = Strings.Format("ZoomPercent", (int)Math.Round(_viewer.Zoom * 100));
         _zoomLabel.Cursor = Cursors.Hand;
         _prevPageButton.Enabled = page > 1;
         _nextPageButton.Enabled = page < _document.PageCount;
-        _pageLabel.Width = (int)Math.Round(135 * (DeviceDpi / 96f));
+        _pageLabel.Width = (int)Math.Round((_linkHoverPreview is not null ? 260 : 135) * (DeviceDpi / 96f));
         InvalidateTitleBar();
     }
 
@@ -1870,6 +2050,7 @@ public sealed class MainWindow : Form
         _handToolButton.IsActive = hasDocument && _viewer.ActiveTool == ViewerTool.Pan;
         _copyButton.Enabled = hasDocument && _viewer.HasSelection;
         _searchButton.Enabled = hasDocument;
+        _printButton.Enabled = hasDocument;
         _sidePanelButton.Enabled = hasDocument;
         if (!hasDocument)
         {
@@ -2095,6 +2276,18 @@ public sealed class MainWindow : Form
                 BeginPageJump();
                 e.Handled = true;
                 break;
+            case Keys.P when e.Control:
+                PrintDocument();
+                e.Handled = true;
+                break;
+            case Keys.D when e.Control:
+                ShowDocumentProperties();
+                e.Handled = true;
+                break;
+            case Keys.F5:
+                ReloadDocument();
+                e.Handled = true;
+                break;
             case Keys.H when e.Alt:
                 ToggleHandTool();
                 e.Handled = true;
@@ -2199,6 +2392,10 @@ public sealed class MainWindow : Form
     private bool TryGetValidStoredBounds(out Rectangle bounds)
     {
         bounds = Rectangle.Empty;
+        if (!_settings.RestoreSession)
+        {
+            return false;
+        }
         if (_settings.WindowX is not int x
             || _settings.WindowY is not int y
             || _settings.WindowWidth is not int width
@@ -2238,6 +2435,7 @@ public sealed class MainWindow : Form
         _titleBar.Height = (int)Math.Round(TitleBarHeight * scale);
         _titleIconBox.Width = (int)Math.Round(28 * scale);
         _toolbar.Height = (int)Math.Round(ToolbarHeight * scale);
+        _settingsButton.Width = (int)Math.Round(42 * scale);
         _statusBar.Height = (int)Math.Round(StatusBarHeight * scale);
         _prevPageButton.Width = (int)Math.Round(28 * scale);
         _nextPageButton.Width = (int)Math.Round(28 * scale);

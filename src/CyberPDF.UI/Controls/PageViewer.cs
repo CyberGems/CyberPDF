@@ -61,6 +61,9 @@ public sealed class PageViewer : Control
     /// </summary>
     private readonly Dictionary<int, PageTextLayer> _textLayers = new();
     private readonly HashSet<int> _textInFlight = new();
+    private readonly Dictionary<int, PageLinkLayer> _linkLayers = new();
+    private readonly HashSet<int> _linksInFlight = new();
+    private PdfLink? _hoveredLink;
 
     /// <summary>
     /// Pages already searched for the current query. Text extraction can serve
@@ -123,6 +126,12 @@ public sealed class PageViewer : Control
 
     /// <summary>Raised on Ctrl+Wheel so the host window updates zoom cleanly.</summary>
     public event EventHandler<float>? ZoomRequested;
+
+    /// <summary>Raised when the pointer hovers or leaves a PDF link.</summary>
+    public event EventHandler<string?>? LinkHovered;
+
+    /// <summary>Raised when an internal page link is activated.</summary>
+    public event EventHandler<int>? LinkPageRequested;
 
     public PdfDocument? Document => _document;
 
@@ -187,6 +196,10 @@ public sealed class PageViewer : Control
         _engine.DropCachedPages();
         _textLayers.Clear();
         _textInFlight.Clear();
+        _linkLayers.Clear();
+        _linksInFlight.Clear();
+        _hoveredLink = null;
+        LinkHovered?.Invoke(this, null);
         _highlightCache.Clear();
         _searchTexts.Clear();
         _searchedPages.Clear();
@@ -750,6 +763,7 @@ public sealed class PageViewer : Control
 
         foreach (var slot in _layout.VisiblePages(top, bottom))
         {
+            EnsureLinkLayer(slot.PageIndex);
             if (_failedPages.Contains(slot.PageIndex))
             {
                 continue;
@@ -1283,6 +1297,11 @@ public sealed class PageViewer : Control
             if (!moved && _clickCount == 1)
             {
                 ClearSelection();
+                if (TryActivateLink(e.Location))
+                {
+                    UpdateHoverCursor(e.Location);
+                    return;
+                }
             }
             UpdateHoverCursor(e.Location);
         }
@@ -1295,6 +1314,114 @@ public sealed class PageViewer : Control
         {
             Cursor = Cursors.Default;
         }
+        SetHoveredLink(null);
+    }
+
+    private void EnsureLinkLayer(int pageIndex)
+    {
+        if (_document is null || _linkLayers.ContainsKey(pageIndex) || _linksInFlight.Contains(pageIndex))
+        {
+            return;
+        }
+
+        var doc = _document;
+        _linksInFlight.Add(pageIndex);
+        _engine.GetLinks(
+            doc,
+            pageIndex,
+            layer =>
+            {
+                if (IsDisposed || !IsHandleCreated)
+                {
+                    return;
+                }
+                try
+                {
+                    BeginInvoke(() =>
+                    {
+                        _linksInFlight.Remove(pageIndex);
+                        if (doc == _document)
+                        {
+                            _linkLayers[pageIndex] = layer;
+                        }
+                    });
+                }
+                catch (InvalidOperationException)
+                {
+                }
+            },
+            _ =>
+            {
+                if (IsDisposed || !IsHandleCreated)
+                {
+                    return;
+                }
+                try
+                {
+                    BeginInvoke(() => _linksInFlight.Remove(pageIndex));
+                }
+                catch (InvalidOperationException)
+                {
+                }
+            });
+    }
+
+    private PdfLink? HitTestLink(Point location)
+    {
+        if (HitTestPdfPoint(location) is not var (pageIndex, pdfX, pdfY))
+        {
+            return null;
+        }
+        if (!_linkLayers.TryGetValue(pageIndex, out var layer))
+        {
+            EnsureLinkLayer(pageIndex);
+            return null;
+        }
+        return layer.HitTest(pdfX, pdfY);
+    }
+
+    private bool TryActivateLink(Point location)
+    {
+        var link = HitTestLink(location);
+        if (link is null)
+        {
+            return false;
+        }
+        if (link.TargetPage is int targetPage)
+        {
+            ScrollToPage(targetPage);
+            LinkPageRequested?.Invoke(this, targetPage);
+            return true;
+        }
+        if (link.Uri is string uri && LinkReader.IsSafeExternalUri(uri))
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(uri)
+                {
+                    UseShellExecute = true,
+                });
+            }
+            catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+            {
+                Core.Diagnostics.AppLog.Warn($"Could not launch link '{uri}': {ex.Message}");
+            }
+            return true;
+        }
+        return false;
+    }
+
+    private void SetHoveredLink(PdfLink? link)
+    {
+        if (Equals(link, _hoveredLink))
+        {
+            return;
+        }
+        _hoveredLink = link;
+        var preview = link is null
+            ? null
+            : link.Uri ?? (link.TargetPage is int page ? Strings.Format("GoToPageNumber", page + 1) : null);
+        LinkHovered?.Invoke(this, preview);
     }
 
     private void UpdateDragSelection(Point location)
@@ -1335,10 +1462,19 @@ public sealed class PageViewer : Control
     {
         if (_document is null)
         {
+            SetHoveredLink(null);
             Cursor = Cursors.Default;
             return;
         }
         if (_activeTool == ViewerTool.Pan)
+        {
+            SetHoveredLink(null);
+            Cursor = Cursors.Hand;
+            return;
+        }
+        var link = HitTestLink(location);
+        SetHoveredLink(link);
+        if (link is not null)
         {
             Cursor = Cursors.Hand;
             return;
