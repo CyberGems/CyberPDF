@@ -326,11 +326,15 @@ public sealed class PdfEngine : IDisposable
             }
 
             var cache = engine._cache;
-            if (cache.TryGet(Key, out var cached) && cached is not null)
+            if (cache.TryGetRetained(Key, out var cached) && cached is not null)
             {
                 if (TrySettle())
                 {
-                    _onSuccess(new RenderResult(cached, callerOwns: false));
+                    _onSuccess(new RenderResult(cached, callerOwns: true));
+                }
+                else
+                {
+                    cached.Dispose();
                 }
                 return;
             }
@@ -367,14 +371,15 @@ public sealed class PdfEngine : IDisposable
                 return;
             }
 
-            // Pages larger than the whole budget are handed to the caller so the
-            // visible page still shows; everything else stays cached.
-            var stored = cache.Add(Key, rendered);
+            // Cache acquires its own ref when stored; the caller always owns the
+            // initial ref so eviction on the worker thread cannot dispose pixels
+            // while PageViewer still holds them.
+            _ = cache.AddAndRetain(Key, rendered);
             if (TrySettle())
             {
-                _onSuccess(new RenderResult(rendered, callerOwns: !stored));
+                _onSuccess(new RenderResult(rendered, callerOwns: true));
             }
-            else if (!stored)
+            else
             {
                 rendered.Dispose();
             }

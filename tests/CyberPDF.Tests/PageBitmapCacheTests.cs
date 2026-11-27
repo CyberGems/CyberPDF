@@ -168,4 +168,36 @@ public sealed class PageBitmapCacheTests
         Assert.Same(pageA, gotA);
         Assert.Same(pageB, gotB);
     }
+
+    [Fact]
+    public void AddAndRetain_KeepsCallerBitmapAliveAfterCacheEviction()
+    {
+        using var cache = new PageBitmapCache(90_000);
+        var held = TestPage.Create(100, 100);
+        Assert.True(cache.AddAndRetain(new CacheKey(0, 100, 100, 0), held));
+
+        using var second = TestPage.Create(100, 100);
+        using var third = TestPage.Create(100, 100);
+        Assert.True(cache.AddAndRetain(new CacheKey(1, 100, 100, 0), second));
+        Assert.True(cache.AddAndRetain(new CacheKey(2, 100, 100, 0), third));
+
+        Assert.False(held.IsDisposed);
+        Assert.Equal(100, held.Bitmap.Width);
+
+        held.Dispose();
+        Assert.True(held.IsDisposed);
+    }
+
+    [Fact]
+    public void AddAndRetain_DoesNotDisposeOversizedPageForCaller()
+    {
+        using var cache = new PageBitmapCache(10_000);
+        using var huge = TestPage.Create(100, 100);
+
+        var stored = cache.AddAndRetain(new CacheKey(0, 100, 100, 0), huge);
+
+        Assert.False(stored);
+        Assert.False(huge.IsDisposed);
+        Assert.Equal(100, huge.Bitmap.Width);
+    }
 }

@@ -15,6 +15,7 @@ namespace CyberPDF.Core.Rendering;
 public sealed class RenderedPage : IDisposable
 {
     private Bitmap? _bitmap;
+    private int _refCount = 1;
 
     private RenderedPage(Bitmap bitmap, int offsetY)
     {
@@ -34,7 +35,27 @@ public sealed class RenderedPage : IDisposable
 
     public long ByteSize => _bitmap is null ? 0 : (long)_bitmap.Width * _bitmap.Height * 4;
 
-    public bool IsDisposed => _bitmap is null;
+    public bool IsDisposed => Volatile.Read(ref _refCount) <= 0 || _bitmap is null;
+
+    /// <summary>
+    /// Acquires an additional ownership reference while the page is still alive.
+    /// Returns <see langword="false"/> if the final reference was already released.
+    /// </summary>
+    public bool TryAddRef()
+    {
+        while (true)
+        {
+            var current = Volatile.Read(ref _refCount);
+            if (current <= 0)
+            {
+                return false;
+            }
+            if (Interlocked.CompareExchange(ref _refCount, current + 1, current) == current)
+            {
+                return true;
+            }
+        }
+    }
 
     /// <summary>
     /// The rendered pixels. The page keeps ownership: do not dispose the result.
@@ -134,7 +155,21 @@ public sealed class RenderedPage : IDisposable
 
     public void Dispose()
     {
-        _bitmap?.Dispose();
-        _bitmap = null;
+        while (true)
+        {
+            var current = Volatile.Read(ref _refCount);
+            if (current <= 0)
+            {
+                return;
+            }
+            if (Interlocked.CompareExchange(ref _refCount, current - 1, current) == current)
+            {
+                if (current == 1)
+                {
+                    Interlocked.Exchange(ref _bitmap, null)?.Dispose();
+                }
+                return;
+            }
+        }
     }
 }

@@ -53,6 +53,26 @@ public sealed class PageBitmapCache : IDisposable
     }
 
     /// <summary>
+    /// Looks up a cached page and acquires an extra ownership reference so the
+    /// caller can hold the bitmap safely even if the cache later evicts it.
+    /// </summary>
+    public bool TryGetRetained(in CacheKey key, out RenderedPage? page)
+    {
+        lock (_lock)
+        {
+            if (!_map.TryGetValue(key, out var node) || !node.Value.Page.TryAddRef())
+            {
+                page = null;
+                return false;
+            }
+            _lru.Remove(node);
+            _lru.AddFirst(node);
+            page = node.Value.Page;
+            return true;
+        }
+    }
+
+    /// <summary>
     /// Adds a page, evicting least recently used entries until it fits. Returns
     /// false when a single page is larger than the whole budget: it is disposed
     /// instead of cached, so a huge render never evicts everything else.
@@ -86,6 +106,53 @@ public sealed class PageBitmapCache : IDisposable
                 _map.Remove(last.Value.Key);
                 _currentBytes -= last.Value.Page.ByteSize;
                 last.Value.Page.Dispose();
+            }
+
+            var node = new LinkedListNode<Entry>(new Entry(key, page));
+            _lru.AddFirst(node);
+            _map[key] = node;
+            _currentBytes += added;
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Stores <paramref name="page"/> in the cache while letting the caller keep
+    /// its own reference intact (both when cached and when too large to cache).
+    /// </summary>
+    public bool AddAndRetain(in CacheKey key, RenderedPage page)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+
+        lock (_lock)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+
+            var added = page.ByteSize;
+            if (added > _budgetBytes)
+            {
+                return false;
+            }
+
+            if (_map.TryGetValue(key, out var existing))
+            {
+                _lru.Remove(existing);
+                _map.Remove(key);
+                _currentBytes -= existing.Value.Page.ByteSize;
+                existing.Value.Page.Dispose();
+            }
+
+            while (_currentBytes + added > _budgetBytes && _lru.Last is { } last)
+            {
+                _lru.RemoveLast();
+                _map.Remove(last.Value.Key);
+                _currentBytes -= last.Value.Page.ByteSize;
+                last.Value.Page.Dispose();
+            }
+
+            if (!page.TryAddRef())
+            {
+                return false;
             }
 
             var node = new LinkedListNode<Entry>(new Entry(key, page));

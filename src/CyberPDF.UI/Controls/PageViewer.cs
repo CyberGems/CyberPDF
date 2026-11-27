@@ -45,14 +45,7 @@ public sealed class PageViewer : Control
     private const int TileHeight = 1280;
 
     private readonly PdfEngine _engine;
-    private readonly Dictionary<CacheKey, Bitmap> _tiles = new();
-
-    /// <summary>
-    /// Tiles whose Bitmap this control owns because the engine cache refused
-    /// them (a band larger than the whole cache budget). Cache-owned tiles are
-    /// never disposed here: doing so would free memory the cache still returns.
-    /// </summary>
-    private readonly HashSet<CacheKey> _ownedTiles = new();
+    private readonly Dictionary<CacheKey, RenderedPage> _tiles = new();
     private readonly HashSet<CacheKey> _inFlight = new();
     private readonly HashSet<int> _failedPages = new();
 
@@ -704,14 +697,10 @@ public sealed class PageViewer : Control
 
     private void ResetTiles()
     {
-        foreach (var key in _ownedTiles)
+        foreach (var page in _tiles.Values)
         {
-            if (_tiles.TryGetValue(key, out var owned))
-            {
-                owned.Dispose();
-            }
+            page.Dispose();
         }
-        _ownedTiles.Clear();
         _tiles.Clear();
         _inFlight.Clear();
         _failedPages.Clear();
@@ -857,11 +846,10 @@ public sealed class PageViewer : Control
         var stale = _tiles.Keys.Where(k => !keep.Contains(k.PageIndex)).ToList();
         foreach (var key in stale)
         {
-            if (_ownedTiles.Remove(key))
+            if (_tiles.Remove(key, out var evicted))
             {
-                _tiles[key].Dispose();
+                evicted.Dispose();
             }
-            _tiles.Remove(key);
         }
     }
 
@@ -975,6 +963,7 @@ public sealed class PageViewer : Control
         {
             BeginInvoke(() =>
             {
+                var adopted = false;
                 try
                 {
                     if (IsDisposed)
@@ -984,33 +973,29 @@ public sealed class PageViewer : Control
 
                     // A render can finish after a zoom, rotation or resize has
                     // rebuilt the layout. Its key no longer describes the current
-                    // geometry, and the pixels may already have been released by
-                    // the cache clear, so accepting it would leave a dead bitmap
-                    // in the map for OnPaint to touch.
+                    // geometry, so reject it and release our ref below.
                     if (!IsCurrentKey(key))
                     {
                         return;
                     }
 
-                    // The page is either owned by the engine cache or by us, never
-                    // both. Either way the Bitmap is referenced directly: copying it
-                    // here used to double the memory of every visible band.
-                    if (_tiles.Remove(key, out var old) && _ownedTiles.Remove(key))
+                    // Each render callback holds its own reference-counted
+                    // RenderedPage (sharing the single underlying Bitmap without
+                    // copying), so adopting it keeps pixels valid even if the
+                    // engine cache later evicts its copy.
+                    if (_tiles.Remove(key, out var old))
                     {
                         old.Dispose();
                     }
 
-                    _tiles[key] = result.Page.Bitmap;
-                    if (result.CallerOwns)
-                    {
-                        _ownedTiles.Add(key);
-                    }
+                    _tiles[key] = result.Page;
+                    adopted = true;
                     _inFlight.Remove(key);
                     Invalidate();
                 }
                 finally
                 {
-                    if (result.CallerOwns)
+                    if (!adopted && result.CallerOwns)
                     {
                         result.Page.Dispose();
                     }
@@ -1142,11 +1127,12 @@ public sealed class PageViewer : Control
             {
                 var bandHeight = Math.Min(TileHeight, slot.Height - bandTop);
                 var key = new CacheKey(slot.PageIndex, slot.Width, bandHeight, _rotation, bandTop, slot.Height, _document.Id);
-                if (!_tiles.TryGetValue(key, out var bitmap))
+                if (!_tiles.TryGetValue(key, out var tile) || tile.IsDisposed)
                 {
                     continue;
                 }
 
+                var bitmap = tile.Bitmap;
                 // 1:1 in device pixels: the bitmap was rasterized at exactly this
                 // size, so GDI+ does not resample and keeps no scaled copy.
                 var destination = new Rectangle(left, top + bandTop, slot.Width, bandHeight);
