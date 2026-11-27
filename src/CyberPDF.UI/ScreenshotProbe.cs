@@ -48,29 +48,32 @@ internal static class ScreenshotProbe
         bool selectText = false,
         string? searchTerm = null,
         int? panelTab = null,
-        bool aboutDialog = false)
+        bool aboutDialog = false,
+        bool closeDialog = false)
     {
         Theme.Apply(Theme.CurrentTheme);
 
-        if (aboutDialog)
+        if (aboutDialog || closeDialog)
         {
-            using var about = new Controls.AboutDialog(autoCheckUpdates: false);
-            about.StartPosition = FormStartPosition.Manual;
-            about.Location = window.Location;
-            about.Show(window);
+            using Form modal = closeDialog
+                ? new Controls.CloseConfirmDialog()
+                : new Controls.AboutDialog(autoCheckUpdates: false);
+            modal.StartPosition = FormStartPosition.Manual;
+            modal.Location = window.Location;
+            modal.Show(window);
             await Task.Delay(150);
             Application.DoEvents();
 
-            var aboutSize = about.ClientSize;
-            using var aboutBitmap = new Bitmap(Math.Max(1, aboutSize.Width), Math.Max(1, aboutSize.Height), System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-            about.DrawToBitmap(aboutBitmap, new Rectangle(0, 0, aboutBitmap.Width, aboutBitmap.Height));
+            var modalSize = modal.ClientSize;
+            using var modalBitmap = new Bitmap(Math.Max(1, modalSize.Width), Math.Max(1, modalSize.Height), System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            modal.DrawToBitmap(modalBitmap, new Rectangle(0, 0, modalBitmap.Width, modalBitmap.Height));
             var outDir = Path.GetDirectoryName(Path.GetFullPath(path));
             if (!string.IsNullOrEmpty(outDir))
             {
                 Directory.CreateDirectory(outDir);
             }
-            aboutBitmap.Save(path, ImageFormat.Png);
-            about.Close();
+            modalBitmap.Save(path, ImageFormat.Png);
+            modal.Close();
             return;
         }
 

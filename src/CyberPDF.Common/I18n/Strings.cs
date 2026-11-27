@@ -205,6 +205,21 @@ public static class Strings
         ["TrayCheckUpdates"] = ("Check for Update...", "Buscar actualizaciones..."),
         ["TrayExit"] = ("Exit", "Salir"),
 
+        // Close window confirmation modal
+        ["CloseToTray"] = ("Close to tray", "Cerrar a la bandeja"),
+        ["CloseDialogTitle"] = ("Close window", "Cerrar ventana"),
+        ["CloseDialogDesc"] = ("What would you like to do when closing the window? Minimizing to tray keeps CyberPDF in the background; quitting closes it completely.", "¿Qué te gustaría hacer al cerrar la ventana? Minimizar a la bandeja mantiene CyberPDF en segundo plano; salir la cierra por completo."),
+        ["CloseOptionTrayTitle"] = ("Minimize to tray", "Minimizar a la bandeja"),
+        ["CloseOptionTrayDesc"] = ("Keeps CyberPDF in the background", "Mantiene CyberPDF en segundo plano"),
+        ["CloseOptionQuitTitle"] = ("Quit", "Salir"),
+        ["CloseOptionQuitDesc"] = ("Closes CyberPDF completely", "Cierra CyberPDF por completo"),
+        ["CloseKeySpace"] = ("Space", "Espacio"),
+        ["RememberChoice"] = ("Remember my choice", "Recordar mi elección"),
+        ["CloseBehaviorLabel"] = ("When closing the window", "Al cerrar la ventana"),
+        ["CloseBehaviorAsk"] = ("Ask every time", "Preguntar siempre"),
+        ["CloseBehaviorTray"] = ("Tray", "Bandeja"),
+        ["CloseBehaviorQuit"] = ("Quit", "Salir"),
+
         // Common dialog buttons
         ["Cancel"] = ("Cancel", "Cancelar"),
         ["Accept"] = ("Accept", "Aceptar"),

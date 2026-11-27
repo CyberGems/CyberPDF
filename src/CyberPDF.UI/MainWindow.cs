@@ -94,6 +94,8 @@ public sealed class MainWindow : Form
     private int _rotation;
     private bool _updatingScrollBar;
     private bool _fitPageActive;
+    private bool _forceExit;
+    private bool _closePromptOpen;
     private string? _linkHoverPreview;
 
     public MainWindow(PdfEngine engine, AppSettings settings, SettingsStore store)
@@ -1031,7 +1033,11 @@ public sealed class MainWindow : Form
         _toolTip.Attach(_maximizeButton,
             () => WindowState == FormWindowState.Maximized ? Strings.Get("Restore") : Strings.Get("Maximize"),
             () => WindowState == FormWindowState.Maximized ? "Win+↓" : "Win+↑");
-        _toolTip.Attach(_closeButton, () => Strings.Get("CloseWindow"), () => "Alt+F4");
+        _toolTip.Attach(_closeButton,
+            () => CloseBehaviors.Normalize(_settings.CloseBehavior) == CloseBehaviors.Tray
+                ? Strings.Get("CloseToTray")
+                : Strings.Get("CloseWindow"),
+            () => "Alt+F4");
         _toolTip.Attach(_searchPreviousButton, () => Strings.Get("SearchPrevious"), () => "Shift+F3");
         _toolTip.Attach(_searchNextButton, () => Strings.Get("SearchNext"), () => "F3");
         _toolTip.Attach(_searchCloseButton, () => Strings.Get("SearchClear"), () => "Esc");
@@ -3333,8 +3339,50 @@ public sealed class MainWindow : Form
                 ShowSettingsDialog();
             },
             autoCheckUpdates => ShowAboutDialog(autoCheckUpdates),
-            Close);
+            ForceExitApplication);
         UpdateTrayTooltip();
+    }
+
+    private void ForceExitApplication()
+    {
+        _forceExit = true;
+        Close();
+    }
+
+    private void PromptCloseBehavior()
+    {
+        if (_closePromptOpen || IsDisposed)
+        {
+            return;
+        }
+        _closePromptOpen = true;
+        try
+        {
+            using var dialog = new CloseConfirmDialog();
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            if (dialog.RememberChoice)
+            {
+                _settings.CloseBehavior = CloseBehaviors.Normalize(dialog.Choice);
+                _store.Save(_settings);
+            }
+
+            if (dialog.Choice == CloseBehaviors.Tray)
+            {
+                Hide();
+            }
+            else
+            {
+                ForceExitApplication();
+            }
+        }
+        finally
+        {
+            _closePromptOpen = false;
+        }
     }
 
     private void ToggleTrayWindowVisibility()
@@ -3372,6 +3420,23 @@ public sealed class MainWindow : Form
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
+        if (!_forceExit && !_suppressPersistenceOnClose && e.CloseReason == CloseReason.UserClosing)
+        {
+            var behavior = CloseBehaviors.Normalize(_settings.CloseBehavior);
+            if (behavior == CloseBehaviors.Tray)
+            {
+                e.Cancel = true;
+                Hide();
+                return;
+            }
+            if (behavior == CloseBehaviors.Ask)
+            {
+                e.Cancel = true;
+                BeginInvoke(PromptCloseBehavior);
+                return;
+            }
+        }
+
         if (!_suppressPersistenceOnClose)
         {
             SaveViewState();

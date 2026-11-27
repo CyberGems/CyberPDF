@@ -232,4 +232,18 @@ public sealed class SettingsStoreTests : IDisposable
         var sanitized = store.Load();
         Assert.Equal(HighlightColors.Yellow, sanitized.HighlightColor);
     }
+
+    [Fact]
+    public void CloseBehaviorRoundTripsAndNormalizesInvalidValues()
+    {
+        var store = new SettingsStore(_file);
+        store.Save(new AppSettings { CloseBehavior = CloseBehaviors.Tray });
+
+        var loaded = store.Load();
+        Assert.Equal(CloseBehaviors.Tray, loaded.CloseBehavior);
+
+        File.WriteAllText(_file, "{\"closeBehavior\":\"something-else\"}");
+        var sanitized = store.Load();
+        Assert.Equal(CloseBehaviors.Ask, sanitized.CloseBehavior);
+    }
 }

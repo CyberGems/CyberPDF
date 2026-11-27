@@ -41,6 +41,10 @@ public sealed class SettingsDialog : Form
     private readonly Label _defaultPdfHeader = new();
     private readonly ToolButton _defaultPdfBtn = new();
     private readonly Label _defaultPdfHint = new();
+    private readonly Label _closeBehaviorHeader = new();
+    private readonly ToolButton _closeAskBtn = new();
+    private readonly ToolButton _closeTrayBtn = new();
+    private readonly ToolButton _closeQuitBtn = new();
     private readonly Label _aboutLabel = new();
     private bool _showDefaultPdfHint;
 
@@ -70,7 +74,7 @@ public sealed class SettingsDialog : Form
         KeyPreview = true;
 
         var scale = DeviceDpi <= 0 ? 1f : DeviceDpi / 96f;
-        ClientSize = new Size((int)Math.Round(460 * scale), (int)Math.Round(512 * scale));
+        ClientSize = new Size((int)Math.Round(460 * scale), (int)Math.Round(574 * scale));
 
         BuildControls(scale);
         RefreshContent();
@@ -181,6 +185,15 @@ public sealed class SettingsDialog : Form
         _defaultPdfHint.Visible = false;
         Controls.Add(_defaultPdfHint);
 
+        y += (int)Math.Round(28 * scale);
+        _closeBehaviorHeader.Bounds = new Rectangle(pad, y, width, (int)Math.Round(20 * scale));
+        Controls.Add(_closeBehaviorHeader);
+        y += (int)Math.Round(24 * scale);
+
+        ConfigureOptionButton(_closeAskBtn, IconKind.None, new Rectangle(pad, y, thirdW, btnH), () => SelectCloseBehavior(CloseBehaviors.Ask));
+        ConfigureOptionButton(_closeTrayBtn, IconKind.None, new Rectangle(pad + thirdW + (int)Math.Round(6 * scale), y, thirdW, btnH), () => SelectCloseBehavior(CloseBehaviors.Tray));
+        ConfigureOptionButton(_closeQuitBtn, IconKind.None, new Rectangle(pad + (thirdW + (int)Math.Round(6 * scale)) * 2, y, thirdW, btnH), () => SelectCloseBehavior(CloseBehaviors.Quit));
+
         _okButton.ShowBorder = true;
         _okButton.IsActive = true;
         _okButton.Size = new Size((int)Math.Round(96 * scale), (int)Math.Round(34 * scale));
@@ -219,6 +232,13 @@ public sealed class SettingsDialog : Form
         RefreshContent();
     }
 
+    private void SelectCloseBehavior(string behavior)
+    {
+        _settings.CloseBehavior = CloseBehaviors.Normalize(behavior);
+        _onSettingsSaved();
+        RefreshContent();
+    }
+
     private void RefreshContent()
     {
         BackColor = Theme.Bg;
@@ -230,6 +250,7 @@ public sealed class SettingsDialog : Form
         _cacheHeader.ForeColor = Theme.TextMuted;
         _defaultPdfHeader.ForeColor = Theme.TextMuted;
         _defaultPdfHint.ForeColor = Theme.TextMuted;
+        _closeBehaviorHeader.ForeColor = Theme.TextMuted;
         _aboutLabel.ForeColor = Theme.TextMuted;
 
         _titleLabel.Text = Strings.Get("Settings");
@@ -274,6 +295,15 @@ public sealed class SettingsDialog : Form
         _defaultPdfBtn.IsActive = isDefaultPdf;
         _defaultPdfHint.Text = Strings.Get("DefaultPdfSettingsHint");
         _defaultPdfHint.Visible = _showDefaultPdfHint && !isDefaultPdf;
+
+        var closeBehavior = CloseBehaviors.Normalize(_settings.CloseBehavior);
+        _closeBehaviorHeader.Text = Strings.Get("CloseBehaviorLabel");
+        _closeAskBtn.Text = Strings.Get("CloseBehaviorAsk");
+        _closeTrayBtn.Text = Strings.Get("CloseBehaviorTray");
+        _closeQuitBtn.Text = Strings.Get("CloseBehaviorQuit");
+        _closeAskBtn.IsActive = closeBehavior == CloseBehaviors.Ask;
+        _closeTrayBtn.IsActive = closeBehavior == CloseBehaviors.Tray;
+        _closeQuitBtn.IsActive = closeBehavior == CloseBehaviors.Quit;
 
         var ver = Assembly.GetExecutingAssembly().GetName().Version;
         var verText = ver is null ? "0.1.0" : $"{ver.Major}.{ver.Minor}.{ver.Build}";

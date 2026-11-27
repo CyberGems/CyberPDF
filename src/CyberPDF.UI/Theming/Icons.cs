@@ -487,6 +487,17 @@ public static class Icons
                 g.DrawLines(pen, new[] { new PointF(5.8f, 2.6f), new PointF(4.4f, 8.6f), new PointF(11.6f, 8.6f), new PointF(10.2f, 2.6f) });
                 g.DrawLine(pen, 8f, 8.6f, 8f, 13.8f);
                 break;
+
+            case IconKind.TrayMinimize:
+                g.DrawLines(pen, new[] { new PointF(2.8f, 10.5f), new PointF(2.8f, 13.2f), new PointF(13.2f, 13.2f), new PointF(13.2f, 10.5f) });
+                g.DrawLine(pen, 8f, 2.6f, 8f, 9.8f);
+                g.DrawLines(pen, new[] { new PointF(5.2f, 7.2f), new PointF(8f, 10.2f), new PointF(10.8f, 7.2f) });
+                break;
+
+            case IconKind.Power:
+                g.DrawArc(pen, 3f, 3.2f, 10f, 10f, -55, 290);
+                g.DrawLine(pen, 8f, 2.2f, 8f, 7.6f);
+                break;
         }
 
         g.Restore(state);
@@ -552,4 +563,6 @@ public enum IconKind
     ShowHide,
     Exit,
     Pin,
+    TrayMinimize,
+    Power,
 }

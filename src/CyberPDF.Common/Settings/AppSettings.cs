@@ -52,6 +52,9 @@ public sealed class AppSettings
     /// <summary>Default color identifier used by the highlight button and shortcut.</summary>
     public string HighlightColor { get; set; } = HighlightColors.Yellow;
 
+    /// <summary>What clicking window close does: <c>ask</c>, <c>tray</c>, or <c>quit</c>.</summary>
+    public string CloseBehavior { get; set; } = CloseBehaviors.Ask;
+
     /// <summary>Paths of recently opened documents, most recent first.</summary>
     public List<string> RecentFiles { get; set; } = new();
 
@@ -74,6 +77,29 @@ public sealed class AppSettings
     public int? WindowHeight { get; set; }
 
     public bool WindowMaximized { get; set; }
+}
+
+/// <summary>Allowed window close actions persisted in settings.</summary>
+public static class CloseBehaviors
+{
+    public const string Ask = "ask";
+    public const string Tray = "tray";
+    public const string Quit = "quit";
+
+    public static string Normalize(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return Ask;
+        }
+
+        return value.Trim().ToLowerInvariant() switch
+        {
+            Tray => Tray,
+            Quit => Quit,
+            _ => Ask,
+        };
+    }
 }
 
 /// <summary>Last position inside a document, restored when it is reopened.</summary>
