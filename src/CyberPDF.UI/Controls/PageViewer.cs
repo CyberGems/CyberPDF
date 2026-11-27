@@ -109,7 +109,8 @@ public sealed class PageViewer : Control
     private string _searchTerm = string.Empty;
     private SearchOptions _searchOptions = new();
 
-    private TextSelection? _selection;
+    private DocumentSelection? _documentSelection;
+    private readonly System.Windows.Forms.Timer _dragScrollTimer = new() { Interval = 35 };
 
     public PageViewer(PdfEngine engine)
     {
@@ -123,6 +124,7 @@ public sealed class PageViewer : Control
             true);
         BackColor = Theme.Canvas;
         TabStop = true;
+        _dragScrollTimer.Tick += OnDragScrollTick;
     }
 
     /// <summary>Raised when the visible page or zoom changes, for the status bar.</summary>
@@ -219,7 +221,8 @@ public sealed class PageViewer : Control
         _searchTerm = string.Empty;
         _matches.Clear();
         _activeMatch = -1;
-        _selection = null;
+        _documentSelection = null;
+        _dragScrollTimer.Stop();
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         _layout = document is null ? null : DocumentLayout.ForDocument(document, LayoutZoom, GapForZoom(), 0, _rotation, _layoutMode);
         _scrollX = 0;
@@ -254,7 +257,8 @@ public sealed class PageViewer : Control
         _searchTerm = string.Empty;
         _matches.Clear();
         _activeMatch = -1;
-        _selection = null;
+        _documentSelection = null;
+        _dragScrollTimer.Stop();
         SelectionChanged?.Invoke(this, EventArgs.Empty);
 
         _zoom = Math.Clamp(zoom, 0.1f, 8f);
@@ -387,32 +391,55 @@ public sealed class PageViewer : Control
     /// <summary>Raised when the selection changes, so the window can enable Copy.</summary>
     public event EventHandler? SelectionChanged;
 
-    /// <summary>Current selection, or null when nothing is selected.</summary>
-    public TextSelection? Selection => _selection;
+    /// <summary>Current selection on its start page, or null when nothing is selected.</summary>
+    public TextSelection? Selection
+    {
+        get
+        {
+            if (_documentSelection is not { IsEmpty: false } docSel
+                || !_textLayers.TryGetValue(docSel.StartPage, out var layer))
+            {
+                return null;
+            }
+            var slice = docSel.ForPage(docSel.StartPage, layer.Characters.Count);
+            return slice.IsEmpty ? null : slice;
+        }
+    }
+
+    /// <summary>Returns every non-empty page slice spanned by the current selection.</summary>
+    public IReadOnlyList<TextSelection> GetSelectionRanges()
+    {
+        if (_documentSelection is not { IsEmpty: false } docSel)
+        {
+            return Array.Empty<TextSelection>();
+        }
+        return TextSelectionEngine.SliceByPage(docSel, page => _textLayers.GetValueOrDefault(page));
+    }
 
     /// <summary>True when there is text that can be copied.</summary>
-    public bool HasSelection => _selection is { IsEmpty: false };
+    public bool HasSelection => _documentSelection is { IsEmpty: false };
 
     /// <summary>
-    /// Text of the current selection, empty when nothing is selected. Reads the
-    /// cached layer, so it never blocks on PDFium.
+    /// Text of the current selection across all spanned pages, empty when
+    /// nothing is selected. Reads cached layers, so it never blocks on PDFium.
     /// </summary>
     public string GetSelectedText()
     {
-        if (_selection is not { } selection || !_textLayers.TryGetValue(selection.PageIndex, out var layer))
+        if (_documentSelection is not { IsEmpty: false } docSel)
         {
             return string.Empty;
         }
-        return TextSelectionEngine.BuildText(layer, selection);
+        return TextSelectionEngine.BuildMultiPageText(docSel, page => _textLayers.GetValueOrDefault(page));
     }
 
     public void ClearSelection()
     {
-        if (_selection is null)
+        if (_documentSelection is null)
         {
             return;
         }
-        _selection = null;
+        _documentSelection = null;
+        _dragScrollTimer.Stop();
         _highlightCache.Clear();
         Invalidate();
         SelectionChanged?.Invoke(this, EventArgs.Empty);
@@ -805,8 +832,31 @@ public sealed class PageViewer : Control
 
     private void SetSelection(TextSelection selection)
     {
-        _selection = selection;
+        if (selection.IsEmpty)
+        {
+            ClearSelection();
+            return;
+        }
+        SetDocumentSelection(DocumentSelection.Create(selection.PageIndex, selection.Start, selection.PageIndex, selection.End - 1));
+    }
+
+    private void SetDocumentSelection(DocumentSelection selection)
+    {
+        if (selection.IsEmpty)
+        {
+            ClearSelection();
+            return;
+        }
+
+        _documentSelection = selection;
         _highlightCache.Clear();
+        for (var page = selection.StartPage; page <= selection.EndPage; page++)
+        {
+            if (!_textLayers.ContainsKey(page))
+            {
+                EnsureTextLayer(page, Invalidate);
+            }
+        }
         Invalidate();
         SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -1323,11 +1373,18 @@ public sealed class PageViewer : Control
     /// </summary>
     private void DrawSelection(Graphics graphics, PageSlot slot, int pageLeft, int pageTop)
     {
-        if (_selection is not { } selection || selection.PageIndex != slot.PageIndex || selection.IsEmpty)
+        if (_documentSelection is not { IsEmpty: false } docSel || !docSel.ContainsPage(slot.PageIndex) || _document is null)
         {
             return;
         }
-        if (!_textLayers.TryGetValue(slot.PageIndex, out var layer) || _document is null)
+        if (!_textLayers.TryGetValue(slot.PageIndex, out var layer))
+        {
+            EnsureTextLayer(slot.PageIndex, Invalidate);
+            return;
+        }
+
+        var selection = docSel.ForPage(slot.PageIndex, layer.Characters.Count);
+        if (selection.IsEmpty)
         {
             return;
         }
@@ -1562,6 +1619,17 @@ public sealed class PageViewer : Control
             {
                 UpdateDragSelection(e.Location);
             }
+            if (e.Y < DragScrollEdgePixels || e.Y > ClientSize.Height - DragScrollEdgePixels)
+            {
+                if (!_dragScrollTimer.Enabled)
+                {
+                    _dragScrollTimer.Start();
+                }
+            }
+            else if (_dragScrollTimer.Enabled)
+            {
+                _dragScrollTimer.Stop();
+            }
             return;
         }
 
@@ -1587,6 +1655,7 @@ public sealed class PageViewer : Control
         if (_selecting && e.Button == MouseButtons.Left)
         {
             _lastDragPoint = e.Location;
+            _dragScrollTimer.Stop();
             var moved = _selectionMoved;
             _selecting = false;
             Capture = false;
@@ -1721,37 +1790,129 @@ public sealed class PageViewer : Control
         LinkHovered?.Invoke(this, preview);
     }
 
+    private const int DragScrollEdgePixels = 28;
+
+    private void OnDragScrollTick(object? sender, EventArgs e)
+    {
+        if (!_selecting || _document is null || _layout is null)
+        {
+            _dragScrollTimer.Stop();
+            return;
+        }
+
+        var clientPoint = PointToClient(Cursor.Position);
+        var step = 0;
+        if (clientPoint.Y < DragScrollEdgePixels)
+        {
+            var depth = DragScrollEdgePixels - clientPoint.Y;
+            step = -Math.Clamp(10 + depth / 2, 10, 42);
+        }
+        else if (clientPoint.Y > ClientSize.Height - DragScrollEdgePixels)
+        {
+            var depth = clientPoint.Y - (ClientSize.Height - DragScrollEdgePixels);
+            step = Math.Clamp(10 + depth / 2, 10, 42);
+        }
+
+        if (step == 0)
+        {
+            _dragScrollTimer.Stop();
+            return;
+        }
+
+        ScrollBy(step);
+        _lastDragPoint = clientPoint;
+        if (_selectionAnchorChar >= 0)
+        {
+            _selectionMoved = true;
+            UpdateDragSelection(clientPoint);
+        }
+    }
+
+    private (int PageIndex, double PdfX, double PdfY)? ResolveDragTarget(Point location)
+    {
+        if (HitTestPdfPoint(location) is { } exact)
+        {
+            return exact;
+        }
+        if (_document is null || _layout is null || _layout.Slots.Count == 0)
+        {
+            return null;
+        }
+
+        var singlePageIndex = _layoutMode == PageLayoutMode.SinglePage ? FirstVisiblePage : -1;
+        PageSlot? bestSlot = null;
+        var bestDistSq = double.MaxValue;
+        foreach (var slot in _layout.Slots)
+        {
+            if (singlePageIndex >= 0 && slot.PageIndex != singlePageIndex)
+            {
+                continue;
+            }
+            var left = _layout.CenteredLeft(slot, ClientSize.Width) - _scrollX;
+            var top = slot.Top - _scrollY;
+            var dx = Math.Max(0, Math.Max(left - location.X, location.X - (left + slot.Width)));
+            var dy = Math.Max(0, Math.Max(top - location.Y, location.Y - (top + slot.Height)));
+            var distSq = (double)dx * dx + (double)dy * dy;
+            if (distSq < bestDistSq)
+            {
+                bestDistSq = distSq;
+                bestSlot = slot;
+            }
+        }
+
+        if (bestSlot is not { } chosen)
+        {
+            return null;
+        }
+
+        var chosenLeft = _layout.CenteredLeft(chosen, ClientSize.Width) - _scrollX;
+        var chosenTop = chosen.Top - _scrollY;
+        var clampedX = Math.Clamp(location.X - chosenLeft, 0, Math.Max(0, chosen.Width));
+        var clampedY = Math.Clamp(location.Y - chosenTop, 0, Math.Max(0, chosen.Height));
+        var size = _document.GetPageSize(chosen.PageIndex);
+        var transform = new PageTransform(size, chosen.Width, chosen.Height, _rotation);
+        var (pdfX, pdfY) = transform.ViewToPdf(clampedX, clampedY);
+        return (chosen.PageIndex, pdfX, pdfY);
+    }
+
     private void UpdateDragSelection(Point location)
     {
         if (_document is null || _layout is null
             || _selectionAnchorPage < 0 || _selectionAnchorPage >= _layout.Slots.Count
-            || !_textLayers.TryGetValue(_selectionAnchorPage, out var layer))
+            || _selectionAnchorChar < 0)
         {
             return;
         }
 
-        var slot = _layout.Slots[_selectionAnchorPage];
-        var left = _layout.CenteredLeft(slot, ClientSize.Width) - _scrollX;
-        var top = slot.Top - _scrollY;
-        var clampedX = Math.Clamp(location.X - left, 0, Math.Max(0, slot.Width));
-        var clampedY = Math.Clamp(location.Y - top, 0, Math.Max(0, slot.Height));
+        if (ResolveDragTarget(location) is not var (targetPage, pdfX, pdfY))
+        {
+            return;
+        }
 
-        var size = _document.GetPageSize(_selectionAnchorPage);
-        var transform = new PageTransform(size, slot.Width, slot.Height, _rotation);
-        var (pdfX, pdfY) = transform.ViewToPdf(clampedX, clampedY);
+        if (!_textLayers.TryGetValue(targetPage, out var targetLayer))
+        {
+            var seq = _selectionSequence;
+            var capturedPoint = location;
+            EnsureTextLayer(targetPage, () =>
+            {
+                if (seq == _selectionSequence && _selectionAnchorChar >= 0)
+                {
+                    UpdateDragSelection(_selecting ? PointToClient(Cursor.Position) : capturedPoint);
+                }
+            });
+            return;
+        }
 
-        var endChar = TextSelectionEngine.ClosestCharacterIndex(layer, pdfX, pdfY);
+        var endChar = TextSelectionEngine.ClosestCharacterIndex(targetLayer, pdfX, pdfY);
         if (endChar < 0)
         {
             return;
         }
 
-        var start = Math.Min(_selectionAnchorChar, endChar);
-        var length = Math.Abs(endChar - _selectionAnchorChar) + 1;
-        var next = new TextSelection(_selectionAnchorPage, start, length);
-        if (_selection != next)
+        var next = DocumentSelection.Create(_selectionAnchorPage, _selectionAnchorChar, targetPage, endChar);
+        if (_documentSelection != next)
         {
-            SetSelection(next);
+            SetDocumentSelection(next);
         }
     }
 
@@ -1877,6 +2038,8 @@ public sealed class PageViewer : Control
     {
         if (disposing)
         {
+            _dragScrollTimer.Stop();
+            _dragScrollTimer.Dispose();
             ResetTiles();
             _darkImageAttributes?.Dispose();
             _darkImageAttributes = null;

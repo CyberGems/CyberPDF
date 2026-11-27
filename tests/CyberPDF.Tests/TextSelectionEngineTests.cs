@@ -183,4 +183,69 @@ public sealed class TextSelectionEngineTests
         Assert.Equal(15, rect.Left, 3);
         Assert.Equal(40, rect.Right, 3);
     }
+
+    [Fact]
+    public void DocumentSelectionNormalizesForwardAndReverseOrder()
+    {
+        var forward = DocumentSelection.Create(0, 2, 2, 4);
+        var reversePages = DocumentSelection.Create(2, 4, 0, 2);
+        var reverseSamePage = DocumentSelection.Create(1, 9, 1, 3);
+
+        Assert.Equal(forward, reversePages);
+        Assert.Equal(1, reverseSamePage.StartPage);
+        Assert.Equal(3, reverseSamePage.StartChar);
+        Assert.Equal(9, reverseSamePage.EndChar);
+    }
+
+    [Fact]
+    public void DocumentSelectionForPageSlicesStartMiddleAndEnd()
+    {
+        var docSel = DocumentSelection.Create(1, 3, 3, 2);
+
+        Assert.False(docSel.ContainsPage(0));
+        Assert.False(docSel.ContainsPage(4));
+        Assert.Equal(default, docSel.ForPage(0, 10));
+        Assert.Equal(new TextSelection(1, 3, 7), docSel.ForPage(1, 10));
+        Assert.Equal(new TextSelection(2, 0, 8), docSel.ForPage(2, 8));
+        Assert.Equal(new TextSelection(3, 0, 3), docSel.ForPage(3, 10));
+    }
+
+    [Fact]
+    public void BuildMultiPageTextAndSliceByPageSkipEmptyMiddlePage()
+    {
+        var page0 = PageTextLayer.Create(
+            new[]
+            {
+                new TextCharacter(0, 'O', 10, 20, 80, 92),
+                new TextCharacter(1, 'n', 20, 30, 80, 92),
+                new TextCharacter(2, 'e', 30, 40, 80, 92),
+            },
+            new PageSize(200, 100));
+        var emptyPage1 = PageTextLayer.Empty(new PageSize(200, 100));
+        var page2 = PageTextLayer.Create(
+            new[]
+            {
+                new TextCharacter(0, 'T', 10, 20, 80, 92),
+                new TextCharacter(1, 'w', 20, 30, 80, 92),
+                new TextCharacter(2, 'o', 30, 40, 80, 92),
+            },
+            new PageSize(200, 100));
+
+        PageTextLayer? Lookup(int p) => p switch
+        {
+            0 => page0,
+            1 => emptyPage1,
+            2 => page2,
+            _ => null,
+        };
+
+        var selection = DocumentSelection.Create(0, 1, 2, 1);
+        var slices = TextSelectionEngine.SliceByPage(selection, Lookup);
+        var text = TextSelectionEngine.BuildMultiPageText(selection, Lookup);
+
+        Assert.Equal(2, slices.Count);
+        Assert.Equal(new TextSelection(0, 1, 2), slices[0]);
+        Assert.Equal(new TextSelection(2, 0, 2), slices[1]);
+        Assert.Equal("ne" + Environment.NewLine + Environment.NewLine + "Tw", text);
+    }
 }

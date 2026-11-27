@@ -1939,26 +1939,39 @@ public sealed class MainWindow : Form
 
     private void AddHighlight(string color)
     {
-        if (_document is null || _showingStartTab || _viewer.Selection is not { IsEmpty: false } selection)
+        if (_document is null || _showingStartTab)
         {
             return;
         }
 
-        var snippet = _viewer.GetSelectedText().Trim();
-        if (snippet.Length > 120)
+        var ranges = _viewer.GetSelectionRanges();
+        if (ranges.Count == 0)
         {
-            snippet = snippet.Substring(0, 120);
+            return;
         }
 
-        _currentAnnotations.Highlights.Add(new TextHighlight
+        var normalized = HighlightColors.Normalize(color);
+        var fullSnippet = _viewer.GetSelectedText().Trim();
+        foreach (var range in ranges)
         {
-            Id = Guid.NewGuid().ToString("N"),
-            PageIndex = selection.PageIndex,
-            Start = selection.Start,
-            Length = selection.Length,
-            Color = HighlightColors.Normalize(color),
-            Snippet = snippet,
-        });
+            var snippet = ranges.Count == 1
+                ? fullSnippet
+                : Strings.Format("BookmarkPageLabel", range.PageIndex + 1);
+            if (snippet.Length > 120)
+            {
+                snippet = snippet.Substring(0, 120);
+            }
+
+            _currentAnnotations.Highlights.Add(new TextHighlight
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                PageIndex = range.PageIndex,
+                Start = range.Start,
+                Length = range.Length,
+                Color = normalized,
+                Snippet = snippet,
+            });
+        }
 
         PersistCurrentAnnotations();
         _viewer.SetHighlights(_currentAnnotations.Highlights);

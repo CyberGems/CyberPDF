@@ -17,6 +17,43 @@ public readonly record struct TextSelection(int PageIndex, int Start, int Length
 }
 
 /// <summary>
+/// A normalized selection range that can span across multiple pages.
+/// </summary>
+public readonly record struct DocumentSelection(int StartPage, int StartChar, int EndPage, int EndChar)
+{
+    public static DocumentSelection Create(int pageA, int charA, int pageB, int charB)
+    {
+        if (pageA > pageB || (pageA == pageB && charA > charB))
+        {
+            return new DocumentSelection(pageB, charB, pageA, charA);
+        }
+        return new DocumentSelection(pageA, charA, pageB, charB);
+    }
+
+    public bool IsEmpty => StartPage < 0 || EndPage < StartPage || (StartPage == EndPage && EndChar < StartChar);
+
+    public bool ContainsPage(int pageIndex) => !IsEmpty && pageIndex >= StartPage && pageIndex <= EndPage;
+
+    public TextSelection ForPage(int pageIndex, int pageCharacterCount)
+    {
+        if (!ContainsPage(pageIndex) || pageCharacterCount <= 0)
+        {
+            return default;
+        }
+
+        var lastIndex = pageCharacterCount - 1;
+        var from = pageIndex == StartPage ? Math.Clamp(StartChar, 0, lastIndex) : 0;
+        var to = pageIndex == EndPage ? Math.Clamp(EndChar, 0, lastIndex) : lastIndex;
+        if (to < from)
+        {
+            return default;
+        }
+
+        return new TextSelection(pageIndex, from, to - from + 1);
+    }
+}
+
+/// <summary>
 /// Turns text layers into the thing the user sees: highlighted rectangles and a
 /// clipboard string.
 /// </summary>
@@ -153,6 +190,64 @@ public static class TextSelectionEngine
         }
 
         return builder.ToString().TrimEnd();
+    }
+
+    /// <summary>
+    /// Splits a multi-page selection into non-empty per-page slices using the supplied text layers.
+    /// </summary>
+    public static List<TextSelection> SliceByPage(DocumentSelection selection, Func<int, PageTextLayer?> layerProvider)
+    {
+        ArgumentNullException.ThrowIfNull(layerProvider);
+        var result = new List<TextSelection>();
+        if (selection.IsEmpty)
+        {
+            return result;
+        }
+
+        for (var page = selection.StartPage; page <= selection.EndPage; page++)
+        {
+            var layer = layerProvider(page);
+            if (layer is null || layer.IsEmpty)
+            {
+                continue;
+            }
+            var slice = selection.ForPage(page, layer.Characters.Count);
+            if (!slice.IsEmpty)
+            {
+                result.Add(slice);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Builds clipboard text across all pages spanned by <paramref name="selection"/>.
+    /// </summary>
+    public static string BuildMultiPageText(DocumentSelection selection, Func<int, PageTextLayer?> layerProvider)
+    {
+        ArgumentNullException.ThrowIfNull(layerProvider);
+        if (selection.IsEmpty)
+        {
+            return string.Empty;
+        }
+
+        var parts = new List<string>();
+        foreach (var slice in SliceByPage(selection, layerProvider))
+        {
+            var layer = layerProvider(slice.PageIndex);
+            if (layer is null)
+            {
+                continue;
+            }
+            var pageText = BuildText(layer, slice);
+            if (!string.IsNullOrEmpty(pageText))
+            {
+                parts.Add(pageText);
+            }
+        }
+
+        return string.Join(Environment.NewLine + Environment.NewLine, parts);
     }
 
     /// <summary>
