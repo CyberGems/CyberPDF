@@ -32,3 +32,8 @@ coverage/
 
 # Local scratch: screenshots, notes, reference material. Never committed.
 artifacts/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+desktop.ini
