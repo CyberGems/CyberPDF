@@ -87,7 +87,7 @@ Muchos lectores ligeros arrancan rápido pero no tienen las herramientas que usa
 - Abre desde el diálogo, arrastrando o por línea de comandos, con diálogo de contraseña temático para archivos protegidos
 - Modos continuo, página única y dos páginas, más un filtro nocturno opcional (`Alt+N`)
 - Desplazamiento vertical y horizontal con barras temáticas, rueda del ratón (`Ctrl+Rueda` para zoom, `Shift+Rueda` en horizontal), botón central y herramienta mano predeterminada (`Alt+H`)
-- Herramienta de selección de texto (`Alt+S`), copia y resaltados en cuatro colores (`Alt+M` o menú contextual de la página), con el color activo recordado y anotaciones guardadas por documento en `%LOCALAPPDATA%\CyberPDF\annotations.json`
+- Herramienta de selección de texto (`Alt+S`) compatible con selección multipágina y desplazamiento automático en bordes, copia y resaltados en cuatro colores (`Alt+M` o menú contextual de la página) guardados por documento en `%LOCALAPPDATA%\CyberPDF\annotations.json`
 - Marcadores personales por página (`Ctrl+B`) en el panel lateral sobre el índice, renombrables en línea y señalados con una cinta en las miniaturas
 - Enlaces internos clicables y enlaces web o de correo externos
 - Búsqueda flotante arriba a la derecha (`Ctrl+F`) con mayúsculas (`Aa`), palabra completa (`ab`), contador y navegación con `Enter` / `Shift+Enter` sin mover el diseño de la página

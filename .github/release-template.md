@@ -6,11 +6,8 @@
 
 ### 🚀 What's new in this release
 
-<!-- IMPORTANT FOR AGENTS & MAINTAINERS: Always rewrite this entire section and highlights with the ACTUAL release notes for this specific new version before tagging. NEVER leave or copy previous version notes! Use 25-45 words for the summary, lead with user-facing changes, and do not repeat the app name or version. Keep the Spanish mirror inside the details block in sync: translate the summary and rewrite the highlights. -->
-<!-- COVERAGE: list every commit since the previous tag before drafting. Give every user-facing change at least one highlight and group related commits into one. Skip internal refactors, CI, tests and dependency bumps with no visible effect; keep small visible fixes such as copy, tooltips, shortcuts, themes, icons, spacing, stability and perceptible performance. Review the draft if 15+ user-facing commits produce fewer than 6 highlights, or 40+ total commits fewer than 8. Patch releases may have 1-3 highlights or a plain maintenance-only note. -->
-
 <!-- changelog-summary:start -->
-Desktop polish release: system tray icon and quick menu, themed About dialog with GitHub update check, official CyberPDF branding icon, default PDF reader setup, inline bookmark renaming, and remembered highlight colors.
+Stability and workflow release fixing the tall-page rendering crash, repairing text selection with multi-page drag and auto-scroll, setting Hand as the default mode beside Select Text, and adding Save As, the close-to-tray prompt, centered titlebar filenames, and disabled-button tooltips.
 <!-- changelog-summary:end -->
 
 > **New to CyberPDF?** A fast, lightweight PDF reader for Windows, built to open in under half a second.
@@ -19,18 +16,16 @@ Desktop polish release: system tray icon and quick menu, themed About dialog wit
 
 ### ✨ Key Features & Highlights
 
-- 🧭 **System tray icon & quick menu**: toggle window visibility, open a PDF, switch to recent documents, open Settings, or reach Help and update checks straight from the notification area.
-- 💎 **Themed About dialog & update check**: inspect the version, check GitHub Releases for updates, copy diagnostics in one click, and discover sibling apps in the CyberGems suite.
-- 🎨 **Official CyberPDF icon across the app**: sharp new icon artwork in the titlebar, welcome view, taskbar, system tray, About modal, and Windows installer.
-- 📄 **Default PDF reader setup**: register as the `.pdf` handler per user from Settings or keep the default-checked option in the installer, with direct handoff to Windows Default Apps when needed.
-- 🖍️ **Inline bookmark renaming & remembered highlight color**: double-click or right-click any personal bookmark to rename it in place, and pick a persistent default highlighter color from the toolbar swatch.
+- 🖍️ **Fixed multi-page text selection & Hand/Select tools**: repaired cached-rectangle and async extraction bugs, kept line-end matching accurate, added edge auto-scroll, extended selection, copying, and highlights across pages, and added side-by-side **Hand** (`Alt+H`, default with clickable links) and **Select text** (`Alt+S`) buttons.
+- 💾 **Save As & desktop window polish**: press `Ctrl+S` or click Save beside Print (plus page and Settings menus) to save a copy with local annotations, choose tray or quit from the new close confirmation dialog, see centered filenames and clickable branding in the titlebar (`Win+Down`/`Win+Up`/`Alt+F4`), and read tooltips on disabled controls.
+- 🛡️ **Tall multiband PDF stability fix**: reference-counted page bands across the render cache and viewer prevent `Parameter is not valid` crashes when scrolling or zooming oversized documents.
 
 <details>
 <summary><b>🇪🇸 Ver notas de la versión en Español</b></summary>
 
 ### 🚀 Novedades de esta versión
 
-Mejoras de escritorio y acabado: icono y menú rápido en la bandeja del sistema, diálogo Acerca de con búsqueda de actualizaciones en GitHub, icono oficial de CyberPDF, configuración como lector predeterminado, renombrado de marcadores y selector de color de resaltado.
+Versión de estabilidad y flujo de trabajo que corrige el fallo en páginas altas, repara la selección con arrastre multipágina y autodesplazamiento, deja Mano por defecto junto a Selección de texto y añade Guardar como, modal de cierre, título centrado y tooltips en controles deshabilitados.
 
 > **¿Nuevo en CyberPDF?** Un lector de PDF rápido y ligero para Windows, que abre en menos de medio segundo.
 
@@ -38,11 +33,9 @@ Mejoras de escritorio y acabado: icono y menú rápido en la bandeja del sistema
 
 ### ✨ Novedades destacadas
 
-- 🧭 **Icono y menú rápido en la bandeja del sistema**: muestra u oculta la ventana, abre un PDF, accede a documentos recientes o abre Configuración, Ayuda y actualizaciones desde el área de notificaciones.
-- 💎 **Diálogo Acerca de temático y comprobación de actualizaciones**: consulta la versión, busca nuevas versiones en GitHub Releases, copia información de diagnóstico en un clic y explora otras apps de CyberGems.
-- 🎨 **Icono oficial de CyberPDF en toda la app**: nuevo icono en barra de título, bienvenida, barra de tareas, bandeja del sistema, diálogo Acerca de e instalador.
-- 📄 **Configuración como lector de PDF predeterminado**: regístrate como lector de `.pdf` por usuario desde Ajustes o con la opción marcada por defecto en el instalador, abriendo Aplicaciones predeterminadas cuando Windows lo requiera.
-- 🖍️ **Renombrado de marcadores y color de resaltado recordado**: haz doble clic o clic derecho para renombrar tus marcadores personales en línea y elige un color predeterminado para el resaltador desde la barra.
+- 🖍️ **Selección de texto multipágina y botones Mano / Selección**: corregidos el caché y la carrera asíncrona al arrastrar, mejorada la precisión por línea, añadido autodesplazamiento y soporte multipágina al copiar o resaltar, junto a los botones **Mano** (`Alt+H`, predeterminado con enlaces clicables) y **Selección de texto** (`Alt+S`).
+- 💾 **Guardar como... y mejoras de ventana**: pulsa `Ctrl+S` o usa el botón Guardar (también en los menús contextual y de Ajustes) para guardar una copia con sus anotaciones, elige bandeja o salir en el nuevo diálogo al cerrar la ventana, mira el archivo centrado y branding clicable en el título (`Win+↓`/`Win+↑`/`Alt+F4`), y consulta tooltips incluso en botones deshabilitados.
+- 🛡️ **Estabilidad en páginas altas multibanda**: el conteo de referencias sobre franjas renderizadas evita cierres inesperados (`Parameter is not valid`) al desplazar o cambiar el zoom en documentos grandes.
 
 ### ℹ️ Antes de instalar
 

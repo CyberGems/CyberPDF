@@ -4,6 +4,26 @@ All notable changes to CyberPDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project follows
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.1] - 2026-11-27
+
+### 🇺🇸 English
+
+- Fixed `Parameter is not valid` crash when scrolling or zooming tall multiband PDFs by reference-counting rendered page bands across cache and viewer
+- Repaired text selection drag updates, line-edge precision, and async extraction races, and extended text selection and highlights across multiple pages with edge auto-scrolling
+- Added side-by-side **Hand** (`Alt+H`, default) and **Select text** (`Alt+S`) toolbar buttons with a clearer text selection icon and clickable links in Hand mode
+- Added **Save as...** (`Ctrl+S`) in the toolbar, page context menu, and Settings menu to save a byte-exact copy along with local highlights and bookmarks
+- Added the suite-standard **Close window** confirmation dialog (`Minimize to tray` with `Enter` or `Quit` with `Space`, plus `Remember my choice`) and corresponding Settings control
+- Centered the active document filename in the titlebar, made the left CyberPDF branding clickable to open About, aligned window hotkeys (`Win+Down`, `Win+Up`, `Alt+F4`), and enabled tooltips on disabled buttons
+
+### 🇪🇸 Español
+
+- Corregido el cierre inesperado `Parameter is not valid` al desplazar o hacer zoom en PDFs altos multibanda mediante conteo de referencias entre caché y visor
+- Reparada la selección de texto al arrastrar, la precisión al final de línea y las carreras asíncronas, ampliándola además a múltiples páginas con desplazamiento automático en bordes
+- Añadidos lado a lado los botones **Mano** (`Alt+H`, predeterminado) y **Selección de texto** (`Alt+S`) con un icono más claro y enlaces clicables también en modo Mano
+- Añadida la opción **Guardar como...** (`Ctrl+S`) en la barra de herramientas, el menú contextual de la página y el menú de Ajustes para guardar una copia exacta junto con resaltados y marcadores
+- Añadido el diálogo estándar **Cerrar ventana** (`Minimizar a la bandeja` con `Enter` o `Salir` con `Espacio`, más `Recordar mi elección`) y su ajuste correspondiente en Configuración
+- Centrado el nombre del archivo activo en la barra de título, branding izquierdo clicable para abrir Acerca de, atajos de ventana alineados (`Win+↓`, `Win+↑`, `Alt+F4`) y tooltips visibles en botones deshabilitados
+
 ## [0.3.0] - 2026-11-27
 
 ### 🇺🇸 English

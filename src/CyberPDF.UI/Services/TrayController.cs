@@ -173,7 +173,7 @@ public sealed class TrayController : IDisposable
     {
         var ver = Assembly.GetExecutingAssembly().GetName().Version;
         return ver is null
-            ? "0.3.0"
+            ? "0.3.1"
             : string.Create(CultureInfo.InvariantCulture, $"{ver.Major}.{ver.Minor}.{Math.Max(0, ver.Build)}");
     }
 

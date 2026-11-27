@@ -87,7 +87,7 @@ Most lightweight readers either start fast but lack the tools you use every day,
 - Open by dialog, drag and drop or command line, with a themed password prompt for protected files
 - Continuous, single-page and two-page layouts, plus an optional dark page filter (`Alt+N`)
 - Vertical and horizontal scrolling with themed scrollbars, mouse wheel (`Ctrl+Wheel` to zoom, `Shift+Wheel` horizontally), middle-drag and default hand tool (`Alt+H`)
-- Text selection tool (`Alt+S`), copy and highlights in four colors (`Alt+M` or the page context menu), with the default color remembered and annotations saved per document in `%LOCALAPPDATA%\CyberPDF\annotations.json`
+- Text selection tool (`Alt+S`) supporting single and multi-page drags with edge auto-scroll, copy and highlights in four colors (`Alt+M` or the page context menu), with annotations saved per document in `%LOCALAPPDATA%\CyberPDF\annotations.json`
 - Personal page bookmarks (`Ctrl+B`) shown in the side panel above the outline, renameable inline and marked with a ribbon on thumbnails
 - Clickable internal links and external web or mail links
 - Floating top-right search (`Ctrl+F`) with match case (`Aa`), whole word (`ab`), counter and `Enter` / `Shift+Enter` navigation without shifting the page layout
