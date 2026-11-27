@@ -86,6 +86,8 @@ Mejoras de escritorio y acabado: icono y menú rápido en la bandeja del sistema
 {{PORTABLE_HASH}}
 ```
 
+The checksums are also available as a downloadable [SHA256SUMS.txt](https://github.com/CyberGems/CyberPDF/releases/download/{{VERSION}}/SHA256SUMS.txt).
+
 ---
 
 📜 **Full changelog:** browse every version in [CHANGELOG.md](https://github.com/CyberGems/CyberPDF/blob/main/CHANGELOG.md).
