@@ -37,6 +37,11 @@ internal static class Program
         var store = new SettingsStore();
         var settings = store.Load();
         Strings.Current = SettingsStore.ResolveLanguage(settings);
+        var langArg = args.FirstOrDefault(a => a.StartsWith("--lang=", StringComparison.OrdinalIgnoreCase));
+        if (langArg is not null && Enum.TryParse<Lang>(langArg.AsSpan("--lang=".Length), ignoreCase: true, out var parsedLang))
+        {
+            Strings.Current = parsedLang;
+        }
         var themeArg = args.FirstOrDefault(a => a.StartsWith("--theme=", StringComparison.OrdinalIgnoreCase));
         var activeTheme = settings.Theme;
         if (themeArg is not null && Enum.TryParse<AppTheme>(themeArg.AsSpan("--theme=".Length), ignoreCase: true, out var parsedTheme))

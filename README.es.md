@@ -66,11 +66,11 @@ CyberPDF es un lector de PDF nativo para Windows basado en el motor PDFium de Ch
 
 ---
 
-<!-- Capturas: pendiente de la galería bilingüe EN/ES en el plan de capturas https://github.com/CyberGems/CyberGems.github.io/blob/main/docs/screenshots.md — sustituye el bloque, conserva este encabezado y la entrada de la tabla de contenidos. -->
-
 ## 🖼️ Capturas
 
-> Próximamente...
+<img src="./docs/screenshots/main-es.png" alt="Ventana principal de CyberPDF mostrando Proyecto Orión, panel de marcadores y resaltado amarillo" />
+
+_Ventana del lector en tema predeterminado con el panel lateral (marcadores personales e índice del documento) y un resaltado guardado._
 
 ---
 

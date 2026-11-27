@@ -66,11 +66,11 @@ CyberPDF is a native Windows PDF reader built around Chromium's PDFium engine. I
 
 ---
 
-<!-- Screenshots: pending the bilingual EN/ES gallery in the capture plan at https://github.com/CyberGems/CyberGems.github.io/blob/main/docs/screenshots.md — replace the blockquote, keep this heading and the TOC entry. -->
-
 ## 🖼️ Screenshots
 
-> Coming soon...
+<img src="./docs/screenshots/main-en.png" alt="CyberPDF main window showing Project Orion PDF, bookmarks panel and yellow highlight" />
+
+_Reader window in Default theme with the side panel (personal bookmarks and document outline) and a saved text highlight._
 
 ---
 
