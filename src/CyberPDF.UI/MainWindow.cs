@@ -256,8 +256,16 @@ public sealed class MainWindow : Form
         ConfigureButton(_handToolButton, IconKind.Hand, null, ToggleHandTool);
         ConfigureButton(_copyButton, IconKind.Copy, Strings.Get("Copy"), CopySelection);
         _copyButton.Enabled = false;
-        ConfigureButton(_highlightButton, IconKind.Highlight, null, () => AddHighlight(HighlightColors.Yellow));
+        ConfigureButton(_highlightButton, IconKind.Highlight, null, OnHighlightButtonClick);
         _highlightButton.AccessibleName = Strings.Get("Highlight");
+        _highlightButton.IndicatorColor = Theme.HighlightColor(_settings.HighlightColor);
+        _highlightButton.MouseUp += (_, e) =>
+        {
+            if (e.Button == MouseButtons.Right && _document is not null && !_showingStartTab)
+            {
+                ShowHighlightColorMenu();
+            }
+        };
         _highlightButton.Enabled = false;
         ConfigureButton(_bookmarkButton, IconKind.Bookmark, null, ToggleCurrentPageBookmark);
         _bookmarkButton.AccessibleName = Strings.Get("ToggleBookmark");
@@ -975,7 +983,7 @@ public sealed class MainWindow : Form
         _toolTip.Attach(_rotateRightButton, () => Strings.Get("RotateRight"), () => "Ctrl+R");
         _toolTip.Attach(_handToolButton, () => _viewer.ActiveTool == ViewerTool.Pan ? Strings.Get("SelectTool") : Strings.Get("HandTool"), () => "Alt+H");
         _toolTip.Attach(_copyButton, () => Strings.Get("Copy"), () => "Ctrl+C");
-        _toolTip.Attach(_highlightButton, () => Strings.Get("Highlight"), () => "Alt+M");
+        _toolTip.Attach(_highlightButton, () => $"{Strings.Get("Highlight")} ({GetHighlightColorName(_settings.HighlightColor)})", () => "Alt+M");
         _toolTip.Attach(_bookmarkButton, () => IsCurrentPageBookmarked() ? Strings.Get("RemoveBookmark") : Strings.Get("AddBookmark"), () => "Ctrl+B");
         _toolTip.Attach(_prevPageButton, () => Strings.Get("PreviousPage"), null);
         _toolTip.Attach(_nextPageButton, () => Strings.Get("NextPage"), null);
@@ -1079,6 +1087,7 @@ public sealed class MainWindow : Form
         };
         _sidePanel.PageRequested += (_, page) => _viewer.ScrollToPage(page);
         _sidePanel.PersonalBookmarkDeleteRequested += (_, page) => RemovePersonalBookmark(page);
+        _sidePanel.PersonalBookmarkRenameRequested += (_, args) => RenamePersonalBookmark(args.PageIndex, args.NewLabel);
         _sidePanel.ModeChanged += (_, _) =>
         {
             _settings.SidePanelTab = _sidePanel.Mode;
@@ -1823,9 +1832,10 @@ public sealed class MainWindow : Form
 
     private void UpdateSelectionState()
     {
-        var canActOnSelection = _document is not null && !_showingStartTab && _viewer.HasSelection;
+        var hasDocument = _document is not null && !_showingStartTab;
+        var canActOnSelection = hasDocument && _viewer.HasSelection;
         _copyButton.Enabled = canActOnSelection;
-        _highlightButton.Enabled = canActOnSelection;
+        _highlightButton.Enabled = hasDocument;
         UpdateStatus();
     }
 
@@ -1947,6 +1957,93 @@ public sealed class MainWindow : Form
         }
     }
 
+    private void RenamePersonalBookmark(int pageIndex, string newLabel)
+    {
+        var updated = false;
+        foreach (var bookmark in _currentAnnotations.Bookmarks)
+        {
+            if (bookmark.PageIndex == pageIndex)
+            {
+                bookmark.Label = newLabel;
+                updated = true;
+                break;
+            }
+        }
+        if (updated)
+        {
+            PersistCurrentAnnotations();
+            _sidePanel.SetPersonalBookmarks(_currentAnnotations.Bookmarks);
+        }
+    }
+
+    private void OnHighlightButtonClick()
+    {
+        if (_document is null || _showingStartTab)
+        {
+            return;
+        }
+        if (_viewer.HasSelection)
+        {
+            AddHighlight(_settings.HighlightColor);
+        }
+        else
+        {
+            ShowHighlightColorMenu();
+        }
+    }
+
+    private void ShowHighlightColorMenu()
+    {
+        if (_document is null || _showingStartTab)
+        {
+            return;
+        }
+
+        var current = HighlightColors.Normalize(_settings.HighlightColor);
+        var items = new List<ContextMenuItem>();
+        foreach (var color in HighlightColors.All)
+        {
+            var chosen = color;
+            items.Add(new ContextMenuItem(
+                GetHighlightColorName(chosen),
+                () => SelectHighlightColor(chosen),
+                chosen == current ? IconKind.Check : IconKind.None,
+                true,
+                Theme.HighlightColor(chosen)));
+        }
+
+        var menu = ThemedContextMenu.Create(items.ToArray());
+        var anchor = _highlightButton.PointToScreen(new Point(0, _highlightButton.Height));
+        menu.Show(anchor);
+    }
+
+    private void SelectHighlightColor(string color)
+    {
+        var normalized = HighlightColors.Normalize(color);
+        _settings.HighlightColor = normalized;
+        UpdateHighlightIndicator();
+        if (!_suppressPersistenceOnClose)
+        {
+            _store.Save(_settings);
+        }
+        if (_viewer.HasSelection)
+        {
+            AddHighlight(normalized);
+        }
+    }
+
+    private void UpdateHighlightIndicator()
+        => _highlightButton.IndicatorColor = Theme.HighlightColor(_settings.HighlightColor);
+
+    private static string GetHighlightColorName(string color)
+        => HighlightColors.Normalize(color) switch
+        {
+            HighlightColors.Green => Strings.Get("HighlightGreen"),
+            HighlightColors.Blue => Strings.Get("HighlightBlue"),
+            HighlightColors.Pink => Strings.Get("HighlightPink"),
+            _ => Strings.Get("HighlightYellow"),
+        };
+
     /// <summary>Copies the selected text to the clipboard.</summary>
     private void CopySelection()
     {
@@ -1989,10 +2086,10 @@ public sealed class MainWindow : Form
         if (_viewer.HasSelection)
         {
             items.Add(ContextMenuItem.Separator());
-            items.Add(new ContextMenuItem($"{Strings.Get("Highlight")} ({Strings.Get("HighlightYellow")})", () => AddHighlight(HighlightColors.Yellow), IconKind.Highlight, true));
-            items.Add(new ContextMenuItem($"{Strings.Get("Highlight")} ({Strings.Get("HighlightGreen")})", () => AddHighlight(HighlightColors.Green), IconKind.Highlight, true));
-            items.Add(new ContextMenuItem($"{Strings.Get("Highlight")} ({Strings.Get("HighlightBlue")})", () => AddHighlight(HighlightColors.Blue), IconKind.Highlight, true));
-            items.Add(new ContextMenuItem($"{Strings.Get("Highlight")} ({Strings.Get("HighlightPink")})", () => AddHighlight(HighlightColors.Pink), IconKind.Highlight, true));
+            items.Add(new ContextMenuItem($"{Strings.Get("Highlight")} ({Strings.Get("HighlightYellow")})", () => AddHighlight(HighlightColors.Yellow), IconKind.Highlight, true, Theme.HighlightColor(HighlightColors.Yellow)));
+            items.Add(new ContextMenuItem($"{Strings.Get("Highlight")} ({Strings.Get("HighlightGreen")})", () => AddHighlight(HighlightColors.Green), IconKind.Highlight, true, Theme.HighlightColor(HighlightColors.Green)));
+            items.Add(new ContextMenuItem($"{Strings.Get("Highlight")} ({Strings.Get("HighlightBlue")})", () => AddHighlight(HighlightColors.Blue), IconKind.Highlight, true, Theme.HighlightColor(HighlightColors.Blue)));
+            items.Add(new ContextMenuItem($"{Strings.Get("Highlight")} ({Strings.Get("HighlightPink")})", () => AddHighlight(HighlightColors.Pink), IconKind.Highlight, true, Theme.HighlightColor(HighlightColors.Pink)));
         }
         else if (_viewer.HitTestHighlight(viewerLocation) is { } existing)
         {
@@ -2450,6 +2547,7 @@ public sealed class MainWindow : Form
             _ => IconKind.ThemeDefault,
         };
         _themeButton.AccessibleName = Strings.Get("ChangeTheme");
+        UpdateHighlightIndicator();
         _sidePanel.BackColor = Theme.Surface;
         _sidePanel.Invalidate(true);
         _welcomeView.ApplyTheme();
@@ -2553,7 +2651,7 @@ public sealed class MainWindow : Form
         _handToolButton.Enabled = hasDocument;
         _handToolButton.IsActive = hasDocument && _viewer.ActiveTool == ViewerTool.Pan;
         _copyButton.Enabled = hasDocument && _viewer.HasSelection;
-        _highlightButton.Enabled = hasDocument && _viewer.HasSelection;
+        _highlightButton.Enabled = hasDocument;
         _bookmarkButton.Enabled = hasDocument;
         UpdateBookmarkButtonState();
         _searchButton.Enabled = hasDocument;
@@ -2809,7 +2907,7 @@ public sealed class MainWindow : Form
                 e.Handled = true;
                 break;
             case Keys.M when e.Alt:
-                AddHighlight(HighlightColors.Yellow);
+                AddHighlight(_settings.HighlightColor);
                 e.Handled = true;
                 break;
             case Keys.B when e.Control:

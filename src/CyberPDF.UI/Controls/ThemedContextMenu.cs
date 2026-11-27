@@ -6,12 +6,13 @@ namespace CyberPDF.UI.Controls;
 /// <summary>One row in a themed context menu.</summary>
 public sealed class ContextMenuItem
 {
-    public ContextMenuItem(string text, Action? action, IconKind icon = IconKind.None, bool enabled = true)
+    public ContextMenuItem(string text, Action? action, IconKind icon = IconKind.None, bool enabled = true, Color? swatchColor = null)
     {
         Text = text;
         Action = action;
         Icon = icon;
         Enabled = enabled;
+        SwatchColor = swatchColor;
     }
 
     public string Text { get; }
@@ -21,6 +22,8 @@ public sealed class ContextMenuItem
     public IconKind Icon { get; }
 
     public bool Enabled { get; }
+
+    public Color? SwatchColor { get; }
 
     /// <summary>A separator row.</summary>
     public static ContextMenuItem Separator() => new(string.Empty, null);
@@ -65,7 +68,7 @@ public sealed class ThemedContextMenu : ContextMenuStrip
             {
                 Enabled = item.Enabled,
                 ForeColor = item.Enabled ? Theme.Text : Theme.TextMuted,
-                Tag = item.Icon,
+                Tag = new MenuItemVisual(item.Icon, item.SwatchColor),
             };
             if (item.Action is { } action)
             {
@@ -75,6 +78,8 @@ public sealed class ThemedContextMenu : ContextMenuStrip
         }
         return menu;
     }
+
+    private sealed record MenuItemVisual(IconKind Icon, Color? SwatchColor);
 
     /// <summary>
     /// Renders every row and its vector icon with the theme palette instead of
@@ -102,12 +107,34 @@ public sealed class ThemedContextMenu : ContextMenuStrip
                 ThemePainter.FillRounded(g, bounds, 4, Theme.Pressed);
             }
 
-            if (e.Item.Tag is IconKind icon && icon != IconKind.None)
+            if (e.Item.Tag is MenuItemVisual visual)
             {
                 var iconSize = Math.Clamp(e.Item.Height - 10, 12, 16);
                 var iconRect = new Rectangle(8, (e.Item.Height - iconSize) / 2, iconSize, iconSize);
-                var ink = e.Item.Enabled ? Theme.Text : Theme.TextMuted;
-                Icons.Draw(g, icon, iconRect, ink, 1.45f);
+                if (visual.SwatchColor is { } swatch)
+                {
+                    var diameter = 10;
+                    var dotRect = new Rectangle(
+                        iconRect.X + (iconRect.Width - diameter) / 2,
+                        iconRect.Y + (iconRect.Height - diameter) / 2,
+                        diameter,
+                        diameter);
+                    using var dotBrush = new SolidBrush(Color.FromArgb(255, swatch.R, swatch.G, swatch.B));
+                    using var dotBorder = new Pen(Theme.BorderStrong, 1f);
+                    g.FillEllipse(dotBrush, dotRect);
+                    g.DrawEllipse(dotBorder, dotRect);
+                    if (visual.Icon == IconKind.Check)
+                    {
+                        var ringRect = Rectangle.Inflate(dotRect, 2, 2);
+                        using var accentPen = new Pen(Theme.Accent, 1.5f);
+                        g.DrawEllipse(accentPen, ringRect);
+                    }
+                }
+                else if (visual.Icon != IconKind.None)
+                {
+                    var ink = e.Item.Enabled ? Theme.Text : Theme.TextMuted;
+                    Icons.Draw(g, visual.Icon, iconRect, ink, 1.45f);
+                }
             }
         }
 

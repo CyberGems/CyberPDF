@@ -49,6 +49,9 @@ public sealed class AppSettings
     /// </summary>
     public int RenderCacheBudgetMb { get; set; } = 64;
 
+    /// <summary>Default color identifier used by the highlight button and shortcut.</summary>
+    public string HighlightColor { get; set; } = HighlightColors.Yellow;
+
     /// <summary>Paths of recently opened documents, most recent first.</summary>
     public List<string> RecentFiles { get; set; } = new();
 

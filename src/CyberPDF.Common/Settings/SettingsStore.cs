@@ -95,6 +95,7 @@ public sealed class SettingsStore
         {
             settings.RenderCacheBudgetMb = 64;
         }
+        settings.HighlightColor = HighlightColors.Normalize(settings.HighlightColor);
         settings.RecentFiles ??= new List<string>();
         if (settings.RecentFiles.Count > AppSettings.MaxRecentFiles)
         {

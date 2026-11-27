@@ -148,6 +148,14 @@ public static class Strings
         ["MyBookmarks"] = ("My bookmarks", "Mis marcadores"),
         ["DocumentOutline"] = ("Document outline", "Índice del documento"),
         ["BookmarkPageLabel"] = ("Page {0}", "Página {0}"),
+        ["RenameBookmark"] = ("Rename bookmark", "Renombrar marcador"),
+        ["HighlightColor"] = ("Highlight color", "Color de resaltado"),
+
+        // Default PDF app
+        ["DefaultPdfApp"] = ("Default PDF reader", "Lector de PDF predeterminado"),
+        ["DefaultPdfActive"] = ("CyberPDF is your default PDF reader", "CyberPDF es tu lector de PDF predeterminado"),
+        ["SetDefaultPdf"] = ("Set CyberPDF as default PDF reader", "Establecer CyberPDF como lector predeterminado"),
+        ["DefaultPdfSettingsHint"] = ("Opened Windows Default Apps. Select CyberPDF for .pdf.", "Se abrió Aplicaciones predeterminadas. Elige CyberPDF para .pdf."),
 
         // Common dialog buttons
         ["Cancel"] = ("Cancel", "Cancelar"),

@@ -34,12 +34,15 @@ public sealed class SidePanel : Control
     private readonly Dictionary<int, Bitmap> _thumbCache = new();
     private readonly List<int> _thumbOrder = new();
     private readonly ThinScrollBar _scroll;
+    private readonly UndoableTextBox _renameBox;
     private const int SplitterWidth = 5;
     private const int DeleteButtonWidth = 22;
     private bool _resizing;
     private bool _hoverSplitter;
     private int _resizeStartX;
     private int _resizeStartWidth;
+    private int _renamingPageIndex = -1;
+    private bool _cancelingRename;
 
     private PdfDocument? _document;
     private int _mode; // 0 = thumbnails, 1 = bookmarks
@@ -67,8 +70,36 @@ public sealed class SidePanel : Control
         // The app's own thin scrollbar, so the panel follows the palette. The
         // native one is drawn by Windows and ignores it.
         _scroll = new ThinScrollBar { Dock = DockStyle.Right, Width = 10 };
-        _scroll.ValueChanged += (_, _) => Invalidate();
+        _scroll.ValueChanged += (_, _) =>
+        {
+            CancelRenamePersonalBookmark();
+            Invalidate();
+        };
         Controls.Add(_scroll);
+
+        _renameBox = new UndoableTextBox
+        {
+            Visible = false,
+            BorderStyle = BorderStyle.FixedSingle,
+            Font = new Font("Segoe UI", 9f, FontStyle.Regular, GraphicsUnit.Point),
+        };
+        _renameBox.KeyDown += (_, ke) =>
+        {
+            if (ke.KeyCode == Keys.Enter)
+            {
+                ke.SuppressKeyPress = true;
+                ke.Handled = true;
+                CommitRenamePersonalBookmark();
+            }
+            else if (ke.KeyCode == Keys.Escape)
+            {
+                ke.SuppressKeyPress = true;
+                ke.Handled = true;
+                CancelRenamePersonalBookmark();
+            }
+        };
+        _renameBox.LostFocus += (_, _) => CommitRenamePersonalBookmark();
+        Controls.Add(_renameBox);
     }
 
     /// <summary>Raised when the user picks a page, from a thumbnail or a bookmark.</summary>
@@ -90,6 +121,9 @@ public sealed class SidePanel : Control
     /// <summary>Raised when the user clicks the remove button on a personal bookmark row.</summary>
     public event EventHandler<int>? PersonalBookmarkDeleteRequested;
 
+    /// <summary>Raised when the user renames a personal bookmark inline.</summary>
+    public event EventHandler<(int PageIndex, string NewLabel)>? PersonalBookmarkRenameRequested;
+
     public int Mode => _mode;
 
     public int BookmarkCount => _bookmarks.Count + _personalBookmarks.Count;
@@ -102,6 +136,7 @@ public sealed class SidePanel : Control
         {
             return;
         }
+        CancelRenamePersonalBookmark();
         _mode = mode == 0 ? 0 : 1;
         _scroll.Value = 0;
         UpdateScrollBar();
@@ -111,6 +146,7 @@ public sealed class SidePanel : Control
 
     public void SetDocument(PdfDocument? document)
     {
+        CancelRenamePersonalBookmark();
         _document = document;
         _bookmarks.Clear();
         _personalBookmarks.Clear();
@@ -643,10 +679,98 @@ public sealed class SidePanel : Control
         }
     }
 
+    private void BeginRenamePersonalBookmark(int rowIndex, int pageIndex, string currentLabel)
+    {
+        CancelRenamePersonalBookmark();
+
+        var rowTop = TabHeight - _scroll.Value + rowIndex * RowHeight;
+        if (rowTop < TabHeight || rowTop + RowHeight > Height)
+        {
+            return;
+        }
+
+        var left = ThumbMargin + 18;
+        var width = Math.Max(48, Width - SplitterWidth - _scroll.Width - left - 6);
+        var boxHeight = Math.Max(20, _renameBox.PreferredHeight);
+        var top = rowTop + Math.Max(1, (RowHeight - boxHeight) / 2);
+
+        _renamingPageIndex = pageIndex;
+        _renameBox.BackColor = Theme.Canvas;
+        _renameBox.ForeColor = Theme.Text;
+        _renameBox.Bounds = new Rectangle(left, top, width, boxHeight);
+        _renameBox.Text = currentLabel;
+        _renameBox.Visible = true;
+        _renameBox.BringToFront();
+        _renameBox.Focus();
+        _renameBox.SelectAll();
+    }
+
+    private void CommitRenamePersonalBookmark()
+    {
+        if (_renamingPageIndex < 0 || _cancelingRename)
+        {
+            return;
+        }
+
+        var pageIndex = _renamingPageIndex;
+        var trimmed = _renameBox.Text.Trim();
+        var finalLabel = string.IsNullOrEmpty(trimmed)
+            ? Strings.Format("BookmarkPageLabel", pageIndex + 1)
+            : trimmed;
+
+        _cancelingRename = true;
+        _renamingPageIndex = -1;
+        _renameBox.Visible = false;
+        _cancelingRename = false;
+
+        foreach (var item in _personalBookmarks)
+        {
+            if (item.PageIndex == pageIndex)
+            {
+                item.Label = finalLabel;
+                break;
+            }
+        }
+        Invalidate();
+        PersonalBookmarkRenameRequested?.Invoke(this, (pageIndex, finalLabel));
+    }
+
+    private void CancelRenamePersonalBookmark()
+    {
+        if (_renamingPageIndex < 0 && !_renameBox.Visible)
+        {
+            return;
+        }
+
+        _cancelingRename = true;
+        _renamingPageIndex = -1;
+        _renameBox.Visible = false;
+        _cancelingRename = false;
+    }
+
     protected override void OnMouseDown(MouseEventArgs e)
     {
         base.OnMouseDown(e);
+        if (_renameBox.Visible && !_renameBox.Bounds.Contains(e.Location))
+        {
+            CommitRenamePersonalBookmark();
+        }
         Focus();
+
+        if (e.Button == MouseButtons.Right && IsBookmarks && e.Y >= TabHeight)
+        {
+            var rows = BuildBookmarkRows();
+            var index = (e.Y + _scroll.Value - TabHeight) / RowHeight;
+            if (index >= 0 && index < rows.Count && !rows[index].IsHeader && rows[index].IsPersonal)
+            {
+                var entry = rows[index];
+                var menu = ThemedContextMenu.Create(
+                    new ContextMenuItem(Strings.Get("RenameBookmark"), () => BeginRenamePersonalBookmark(index, entry.PageIndex, entry.Title), IconKind.Highlight, true),
+                    new ContextMenuItem(Strings.Get("RemoveBookmark"), () => PersonalBookmarkDeleteRequested?.Invoke(this, entry.PageIndex), IconKind.Close, true));
+                menu.Show(PointToScreen(e.Location));
+            }
+            return;
+        }
 
         if (e.Button != MouseButtons.Left)
         {
@@ -694,6 +818,29 @@ public sealed class SidePanel : Control
             _currentPage = page;
             Invalidate();
             PageRequested?.Invoke(this, page);
+        }
+    }
+
+    protected override void OnMouseDoubleClick(MouseEventArgs e)
+    {
+        base.OnMouseDoubleClick(e);
+        if (e.Button != MouseButtons.Left || !IsBookmarks || e.Y < TabHeight)
+        {
+            return;
+        }
+
+        var rows = BuildBookmarkRows();
+        var index = (e.Y + _scroll.Value - TabHeight) / RowHeight;
+        if (index < 0 || index >= rows.Count || rows[index].IsHeader || !rows[index].IsPersonal)
+        {
+            return;
+        }
+
+        var rowY = TabHeight - _scroll.Value + index * RowHeight;
+        var rowRect = new Rectangle(0, rowY, Width - SplitterWidth - _scroll.Width, RowHeight);
+        if (!DeleteButtonBounds(rowRect).Contains(e.Location))
+        {
+            BeginRenamePersonalBookmark(index, rows[index].PageIndex, rows[index].Title);
         }
     }
 

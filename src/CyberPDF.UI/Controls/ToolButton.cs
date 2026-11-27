@@ -19,6 +19,7 @@ public sealed class ToolButton : Control
     private bool _hovered;
     private bool _pressed;
     private bool _isActive;
+    private Color? _indicatorColor;
 
     public ToolButton()
     {
@@ -69,6 +70,21 @@ public sealed class ToolButton : Control
     public bool IsWindowChrome { get; set; }
 
     public int CornerRadius { get; set; } = 6;
+
+    /// <summary>Optional color bar painted near the bottom edge (e.g. active highlight color).</summary>
+    public Color? IndicatorColor
+    {
+        get => _indicatorColor;
+        set
+        {
+            if (_indicatorColor == value)
+            {
+                return;
+            }
+            _indicatorColor = value;
+            Invalidate();
+        }
+    }
 
     protected override void OnMouseEnter(EventArgs e)
     {
@@ -149,6 +165,13 @@ public sealed class ToolButton : Control
             var barWidth = Math.Max(8, bounds.Width - 12);
             using var accentBrush = new SolidBrush(Theme.Accent);
             g.FillRectangle(accentBrush, (bounds.Width - barWidth) / 2, bounds.Bottom - 2, barWidth, 2);
+        }
+        if (_indicatorColor is { } swatch && !IsWindowChrome)
+        {
+            var barWidth = Math.Max(10, bounds.Width - 16);
+            var barColor = Color.FromArgb(Enabled ? 235 : 110, swatch.R, swatch.G, swatch.B);
+            var barRect = new Rectangle((bounds.Width - barWidth) / 2, bounds.Bottom - 4, barWidth, 3);
+            ThemePainter.FillRounded(g, barRect, 1, barColor);
         }
         if (ShowBorder)
         {

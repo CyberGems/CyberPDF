@@ -218,4 +218,18 @@ public sealed class SettingsStoreTests : IDisposable
 
         Assert.True(File.Exists(nested));
     }
+
+    [Fact]
+    public void HighlightColorRoundTripsAndNormalizesInvalidValues()
+    {
+        var store = new SettingsStore(_file);
+        store.Save(new AppSettings { HighlightColor = HighlightColors.Green });
+
+        var loaded = store.Load();
+        Assert.Equal(HighlightColors.Green, loaded.HighlightColor);
+
+        File.WriteAllText(_file, "{\"highlightColor\":\"invalid-color\"}");
+        var sanitized = store.Load();
+        Assert.Equal(HighlightColors.Yellow, sanitized.HighlightColor);
+    }
 }
