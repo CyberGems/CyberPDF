@@ -109,6 +109,8 @@ public sealed class TrayController : IDisposable
         var recents = BuildRecentItems();
         var helpItems = new List<ContextMenuItem>
         {
+            new(Strings.Get("GitHubStar"), () => _ = GitHubStarService.StarAsync(), IconKind.Star),
+            ContextMenuItem.Separator(),
             new(Strings.Get("TrayPinIcon"), () => OpenExternal("ms-settings:taskbar"), IconKind.Pin),
             ContextMenuItem.Separator(),
             new(Strings.Get("TrayHelp"), () => OpenExternal(isSpanish ? WikiEsUrl : WikiUrl), IconKind.BookOpen),

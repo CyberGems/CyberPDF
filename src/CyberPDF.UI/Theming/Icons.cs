@@ -462,6 +462,18 @@ public static class Icons
                 break;
             }
 
+            case IconKind.Star:
+            case IconKind.StarFilled:
+            {
+                PointF[] points = [
+                    new(8, 1.5f), new(9.9f, 5.4f), new(14.2f, 6), new(11.1f, 9), new(11.8f, 13.3f),
+                    new(8, 11.3f), new(4.2f, 13.3f), new(4.9f, 9), new(1.8f, 6), new(6.1f, 5.4f)
+                ];
+                if (kind == IconKind.StarFilled) g.FillPolygon(brush, points);
+                else g.DrawPolygon(pen, points);
+                break;
+            }
+
             case IconKind.Help:
                 g.DrawEllipse(pen, 2.2f, 2.2f, 11.6f, 11.6f);
                 g.DrawArc(pen, 5.6f, 4.5f, 4.8f, 4f, 180, 235);
@@ -576,6 +588,8 @@ public enum IconKind
     Bug,
     Tag,
     Heart,
+    Star,
+    StarFilled,
     Help,
     Recent,
     ShowHide,

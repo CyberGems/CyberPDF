@@ -12,6 +12,11 @@ public static class Strings
     private static readonly Dictionary<string, (string En, string Es)> Map = new()
     {
         // Window and app chrome
+        ["GitHubStar"] = ("Star on GitHub", "Dar una estrella en GitHub"),
+        ["GitHubStarBusy"] = ("Starring…", "Enviando estrella…"),
+        ["GitHubStarStarred"] = ("Starred, thank you", "Estrella añadida, gracias"),
+        ["GitHubStarOpened"] = ("Complete your star on GitHub", "Completa la estrella en GitHub"),
+        ["GitHubStarFailed"] = ("Could not open GitHub. Retry", "No se pudo abrir GitHub. Reintentar"),
         ["AppTitle"] = ("CyberPDF", "CyberPDF"),
         ["AppSubtitle"] = ("Fast PDF reader", "Lector de PDF rápido"),
 

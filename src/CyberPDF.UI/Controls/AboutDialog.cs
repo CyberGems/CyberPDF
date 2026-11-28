@@ -1,3 +1,4 @@
+using CyberPDF.UI.Services;
 using System.Diagnostics;
 using System.Drawing.Drawing2D;
 using System.Globalization;
@@ -17,6 +18,19 @@ namespace CyberPDF.UI.Controls;
 /// </summary>
 public sealed class AboutDialog : Form
 {
+    private async Task GiveStarAsync()
+    {
+        _starBtn.Enabled = false;
+        _starStatusKey = "GitHubStarBusy";
+        _starBtn.AccessibleName = Strings.Get(_starStatusKey);
+        var result = await GitHubStarService.StarAsync();
+        if (IsDisposed) return;
+        _starStatusKey = $"GitHubStar{result}";
+        _starBtn.AccessibleName = Strings.Get(_starStatusKey);
+        _starBtn.Icon = result == GitHubStarResult.Starred ? IconKind.StarFilled : IconKind.Star;
+        _starBtn.Enabled = result != GitHubStarResult.Starred;
+    }
+
     private const string RepoUrl = "https://github.com/CyberGems/CyberPDF";
     private const string WikiUrl = $"{RepoUrl}/wiki";
     private const string WikiEsUrl = $"{RepoUrl}/wiki/Home-es";
@@ -55,6 +69,8 @@ public sealed class AboutDialog : Form
     private readonly Label _statusLabel = new();
     private readonly ToolButton _copyDiagBtn = new();
     private readonly ToolButton _donateBtn = new();
+    private readonly ToolButton _starBtn = new();
+    private string _starStatusKey = "GitHubStar";
     private readonly Panel _footerBar = new();
 
     private string? _availableReleaseUrl;
@@ -317,6 +333,7 @@ public sealed class AboutDialog : Form
             (new ToolButton(), IconKind.Bug, "IssuesTooltip", () => OpenUrl($"{RepoUrl}/issues")),
             (_copyDiagBtn, IconKind.Copy, "CopyDiagnostics", CopyDiagnosticsToClipboard),
             (new ToolButton(), IconKind.Tag, "ReleasesTooltip", () => OpenUrl($"{RepoUrl}/releases")),
+            (_starBtn, IconKind.Star, "GitHubStar", () => _ = GiveStarAsync()),
             (_donateBtn, IconKind.Heart, "DonateTooltip", () => OpenUrl(DonateUrl)),
         };
 
@@ -333,7 +350,11 @@ public sealed class AboutDialog : Form
             var action = entry.OnClick;
             entry.Button.Click += (_, _) => action();
 
-            if (ReferenceEquals(entry.Button, _copyDiagBtn))
+            if (ReferenceEquals(entry.Button, _starBtn))
+            {
+                _toolTip.Attach(entry.Button, () => Strings.Get(_starStatusKey), null);
+            }
+            else if (ReferenceEquals(entry.Button, _copyDiagBtn))
             {
                 _toolTip.Attach(entry.Button, () => Strings.Get(_diagCopied ? "DiagnosticsCopied" : "CopyDiagnostics"), null);
             }

@@ -2615,7 +2615,11 @@ public sealed class MainWindow : Form
             new ContextMenuItem(Strings.Get("LanguageEs"), () => ApplyLanguage(Lang.Es), Strings.Current == Lang.Es ? IconKind.Check : IconKind.None),
             ContextMenuItem.Separator(),
             new ContextMenuItem(Strings.Get("Settings"), ShowSettingsDialog, IconKind.Settings),
-            new ContextMenuItem(Strings.Get("AboutMenu"), () => ShowAboutDialog(), IconKind.Gem));
+            new ContextMenuItem(Strings.Get("TrayHelp"), null, IconKind.Help, children: [
+                new ContextMenuItem(Strings.Get("GitHubStar"), () => _ = GitHubStarService.StarAsync(), IconKind.Star),
+                ContextMenuItem.Separator(),
+                new ContextMenuItem(Strings.Get("AboutMenu"), () => ShowAboutDialog(), IconKind.Gem)
+            ]));
 
         var anchor = _settingsButton.PointToScreen(new Point(_settingsButton.Width - menu.PreferredSize.Width, _settingsButton.Height));
         menu.Show(anchor);
